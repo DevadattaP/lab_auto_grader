@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ lab_id }} — Lab</title>
+<link rel="stylesheet" href="/static/vendor/codemirror/codemirror.min.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="app" data-lab-id="{{ lab_id }}" data-roll-no="{{ roll_no }}">
+    <header>
+      <div class="brand">Lab <strong>{{ lab_id }}</strong></div>
+      <div class="who">{% if student_name %}<strong>{{ student_name }}</strong> ({{ roll_no }}){% else %}Roll no. <strong>{{ roll_no }}</strong>{% endif %}</div>
+      <div class="timer" id="timer">--:--</div>
+      <button id="logout-btn" class="secondary">Sign out</button>
+    </header>
+
+    <div id="banner" class="banner" hidden></div>
+
+    <nav id="post-session-nav" class="post-session-nav" hidden>
+      <button type="button" class="post-nav-btn" data-view="workspace">My work</button>
+      <button type="button" class="post-nav-btn" data-view="report">My report</button>
+      <button type="button" class="post-nav-btn" data-view="leaderboard">Leaderboard</button>
+    </nav>
+
+    <main id="waiting-view" hidden>
+      <div class="centered-msg">
+        <h2>Waiting for the lab to start</h2>
+        <p>Your instructor hasn't started this lab session yet. This page will update automatically.</p>
+      </div>
+    </main>
+
+    <main id="workspace-view" hidden>
+      <aside id="question-list"></aside>
+      <section id="workspace">
+        <div id="question-panel">
+          <h2 id="q-title">Select a question</h2>
+          <div id="q-description"></div>
+        </div>
+        <div id="editor-wrap">
+          <textarea id="code-editor"></textarea>
+        </div>
+        <div id="run-bar">
+          <button id="run-btn" disabled>Run</button>
+          <span id="save-status" class="hint"></span>
+        </div>
+        <div id="results-panel"></div>
+      </section>
+    </main>
+
+    <main id="report-view" class="post-content-view" hidden>
+      <div id="report-tab" class="tab-panel"></div>
+    </main>
+
+    <main id="leaderboard-view" class="post-content-view" hidden>
+      <div id="leaderboard-tab" class="tab-panel"></div>
+    </main>
+
+    <main id="nothing-view" class="post-content-view" hidden>
+      <div class="centered-msg">
+        <h2>The lab session has ended</h2>
+        <p>Your results will be communicated to you shortly.</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/vendor/codemirror/codemirror.min.js"></script>
+  <script src="/static/vendor/codemirror/mode/clike/clike.min.js"></script>
+  <script src="/static/editor.js"></script>
+</body>
+</html>

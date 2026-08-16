@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin sign in</title>
+<link rel="stylesheet" href="/admin-static/admin.css">
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <h1>Admin sign in</h1>
+    <form id="login-form">
+      <label>Username
+        <input type="text" id="username" autocomplete="username" required>
+      </label>
+      <label>Password
+        <input type="password" id="password" autocomplete="current-password" required>
+      </label>
+      <button type="submit">Sign in</button>
+      <p id="error" class="error" hidden></p>
+    </form>
+  </div>
+  <script>
+    const form = document.getElementById("login-form");
+    const errorEl = document.getElementById("error");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorEl.hidden = true;
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      const res = await fetch("/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errorEl.textContent = data.error || "Login failed.";
+        errorEl.hidden = false;
+        return;
+      }
+      window.location.href = "/";
+    });
+  </script>
+</body>
+</html>

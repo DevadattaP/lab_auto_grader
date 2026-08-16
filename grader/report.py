@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import ast
 import csv
+import html as html_escape
+import re
 from pathlib import Path
+
+import markdown as markdown_lib
 
 from grader.discover import StudentMapping
 from grader.scorer import QuestionScore
@@ -115,6 +120,53 @@ def _render_scanf_address_issues(qs: QuestionScore) -> list[str]:
     return lines
 
 
+def _render_question_section(qs: QuestionScore, *, show_hidden: bool = True) -> list[str]:
+    """One question's section, from its `## qid: title` header through the
+    trailing blank line. Factored out of render_student_report so the
+    live-lab platform's single-question report (render_live_question_report,
+    below) can reuse the exact same rendering instead of duplicating it.
+    `show_hidden=False` omits the "Hidden tests" line entirely (not just
+    leaves it at 0/0) -- used for a live, open-tests-only run where there is
+    no hidden_summary content to report and showing "Hidden tests: 0/0"
+    would misleadingly read as "this question has no hidden tests" rather
+    than "hidden tests aren't run until the lab ends".
+    """
+    lines = [f"## {qs.qid}: {qs.title} — {qs.marks_earned:g} / {qs.marks_total:g}", ""]
+    if not qs.compile_ok:
+        if qs.not_submitted:
+            lines.append("- **No submission found for this question.**")
+        else:
+            lines.append("- Compiled: **no**")
+        if qs.compile_stderr:
+            lines.append("")
+            lines.append("```")
+            lines.append(qs.compile_stderr.strip())
+            lines.append("```")
+        lines.extend(_render_char_input_issues(qs))
+        lines.extend(_render_scanf_address_issues(qs))
+        lines.append("")
+        return lines
+
+    lines.append("- Compiled: yes")
+    lines.extend(_render_char_input_issues(qs))
+    lines.extend(_render_scanf_address_issues(qs))
+    open_earned = sum(_earned(d) for d in qs.open_details)
+    open_total = sum(d["weight"] for d in qs.open_details)
+    lines.append(f"- Open tests: {open_earned:g}/{open_total:g}")
+    lines.extend(_render_test_list(qs.open_details))
+    if show_hidden:
+        hidden_earned = sum(_earned(d) for d in qs.hidden_summary)
+        hidden_total = sum(d["weight"] for d in qs.hidden_summary)
+        lines.append(f"- Hidden tests: {hidden_earned:g}/{hidden_total:g}")
+        lines.extend(_render_test_list(qs.hidden_summary))
+
+    if qs.code_check_mode is not None:
+        lines.extend(_render_code_check(qs))
+
+    lines.append("")
+    return lines
+
+
 def render_student_report(roll_no: str, question_scores: list[QuestionScore], anomalies: list[str]) -> str:
     lines = [f"# Report — {roll_no}", ""]
     if anomalies:
@@ -126,42 +178,29 @@ def render_student_report(roll_no: str, question_scores: list[QuestionScore], an
     for qs in question_scores:
         total_earned += qs.marks_earned
         total_possible += qs.marks_total
-        lines.append(f"## {qs.qid}: {qs.title} — {qs.marks_earned:g} / {qs.marks_total:g}")
-        lines.append("")
-        if not qs.compile_ok:
-            if qs.not_submitted:
-                lines.append("- **No submission found for this question.**")
-            else:
-                lines.append("- Compiled: **no**")
-            if qs.compile_stderr:
-                lines.append("")
-                lines.append("```")
-                lines.append(qs.compile_stderr.strip())
-                lines.append("```")
-            lines.extend(_render_char_input_issues(qs))
-            lines.extend(_render_scanf_address_issues(qs))
-            lines.append("")
-            continue
-
-        lines.append("- Compiled: yes")
-        lines.extend(_render_char_input_issues(qs))
-        lines.extend(_render_scanf_address_issues(qs))
-        open_earned = sum(_earned(d) for d in qs.open_details)
-        open_total = sum(d["weight"] for d in qs.open_details)
-        hidden_earned = sum(_earned(d) for d in qs.hidden_summary)
-        hidden_total = sum(d["weight"] for d in qs.hidden_summary)
-        lines.append(f"- Open tests: {open_earned:g}/{open_total:g}")
-        lines.extend(_render_test_list(qs.open_details))
-        lines.append(f"- Hidden tests: {hidden_earned:g}/{hidden_total:g}")
-        lines.extend(_render_test_list(qs.hidden_summary))
-
-        if qs.code_check_mode is not None:
-            lines.extend(_render_code_check(qs))
-
-        lines.append("")
+        lines.extend(_render_question_section(qs))
 
     lines.append(f"## Total: {total_earned:g} / {total_possible:g}")
     lines.append("")
+    return "\n".join(lines)
+
+
+def render_live_question_report(roll_no: str, qs: QuestionScore) -> str:
+    """Single-question live-run report, rewritten on every Run click (see
+    LIVE_LAB_DESIGN.md §7.3) -- same rendering vocabulary as one question's
+    section of render_student_report, just for one question at a time,
+    refreshed live instead of produced once at lab-end, and hidden-test-free
+    by construction: `qs` is expected to come from an open-tests-only run
+    (grader.student_view.run_open_tests), so hidden_summary is always empty
+    and is omitted from the rendering entirely rather than shown as 0/0.
+    """
+    lines = [
+        f"# Live run — {roll_no}",
+        "",
+        "_Open tests only — hidden tests are graded after the lab ends._",
+        "",
+    ]
+    lines.extend(_render_question_section(qs, show_hidden=False))
     return "\n".join(lines)
 
 
@@ -250,3 +289,98 @@ def write_grade_feedback_md(
         blocks.append("\n".join(lines))
 
     Path(path).write_text("\n\n".join(blocks) + "\n")
+
+
+# --------------------------------------------------------------------------
+# report markdown -> HTML, shared by every UI that displays a rendered report
+# (ui/app.py's dashboard/result viewer, server_student's "My Report" page,
+# server_admin's live dashboard) -- one place that knows how to turn this
+# module's own markdown output back into readable HTML, instead of each
+# consumer re-implementing (and inevitably drifting from) the same
+# postprocessing.
+# --------------------------------------------------------------------------
+
+# render_student_report/_render_test_list write a failed/partial test's
+# input/expected/actual as three consecutive list items via Python's
+# repr() -- e.g. `'*******\n *****\n  ***\n   *\n'` -- specifically so a real
+# newline or run of spaces is visible as literal `\n`/spaces in the raw .md
+# file (readable in a plain editor/terminal). Markdown then renders that as
+# three separate <li>label: <code>'...'</code></li> items stacked
+# vertically, each showing its repr'd text as one long line with literal
+# backslash-n *characters* in it, not an actual line break. This matches
+# all three together (report.py always emits them as this exact
+# input/expected/actual triplet, nothing else interleaved) and replaces
+# them with one flex row of three bordered, titled columns -- decoding
+# each field's repr text back to its real bytes and rendering it in a
+# <pre> so a multi-line value (a pyramid's rows, a multi-line Secret Pair
+# report, ...) shows real line breaks and indentation, side by side for
+# easy comparison instead of stacked and hard to visually diff. Falls back
+# to leaving the original three <li>s untouched if any field isn't valid
+# repr() syntax (defensive -- should never happen against this module's own
+# output, but this is markdown someone could hand-edit).
+_IO_TRIPLET_RE = re.compile(
+    r"<ul>\s*"
+    r"<li>input: <code>(.*?)</code></li>\s*"
+    r"<li>expected: <code>(.*?)</code></li>\s*"
+    r"<li>actual: <code>(.*?)</code></li>\s*"
+    r"</ul>",
+    re.DOTALL,
+)
+
+
+def render_io_side_by_side(html: str) -> str:
+    def repl(m: re.Match) -> str:
+        cols = []
+        for label, code_content in zip(("input", "expected", "actual"), m.groups()):
+            raw_repr = html_escape.unescape(code_content)
+            try:
+                value = ast.literal_eval(raw_repr)
+            except (ValueError, SyntaxError):
+                return m.group(0)
+            cols.append(
+                f'<div class="io-col"><div class="io-col-title">{label}</div>'
+                f"<pre>{html_escape.escape(value)}</pre></div>"
+            )
+        return f'<div class="io-row">{"".join(cols)}</div>'
+
+    return _IO_TRIPLET_RE.sub(repl, html)
+
+
+# Markdown wraps a `` `...` `` span as a bare <code>...</code> with no
+# white-space CSS override, so consecutive literal spaces inside one (e.g. a
+# test *name* like `pair_AK` glued to surrounding punctuation) collapse
+# down to a single visible space when a browser renders the HTML -- even
+# though the text node itself still has all of them. A ```fenced``` block
+# renders as <pre><code>...</code></pre> instead, which already preserves
+# whitespace via a `pre { white-space: pre-wrap }` rule wherever this HTML
+# is embedded, so that's left alone here (matched by the first branch, kept
+# verbatim). Only a bare inline span (second branch) gets its regular
+# spaces swapped for &nbsp; -- sidesteps whitespace-collapsing at the HTML
+# level so it doesn't matter what CSS the page embedding this HTML does or
+# doesn't apply. Run render_io_side_by_side first so the input/expected/
+# actual fields it already converted to <pre> (which don't need this trick
+# at all) aren't also matched here.
+_CODE_SPAN_RE = re.compile(r"(<pre><code>.*?</code></pre>)|(<code>.*?</code>)", re.DOTALL)
+
+
+def preserve_inline_code_whitespace(html: str) -> str:
+    def repl(m: re.Match) -> str:
+        inline_span = m.group(2)
+        return inline_span.replace(" ", "&nbsp;") if inline_span is not None else m.group(1)
+
+    return _CODE_SPAN_RE.sub(repl, html)
+
+
+def render_markdown_to_html(markdown_text: str) -> str:
+    """The full pipeline: this module's markdown -> readable HTML, ready to
+    embed in any of the UIs listed above. tab_length=2 matches how
+    render_student_report/render_live_question_report nest list items (2
+    spaces, correct CommonMark-style) -- python-markdown's default of 4
+    would otherwise silently flatten every nested list (the per-test
+    PASS/FAIL bullets, and the input/expected/actual bullets nested under a
+    failed/tolerated test) into one single-level list.
+    """
+    html = markdown_lib.markdown(markdown_text, extensions=["fenced_code", "tables"], tab_length=2)
+    html = render_io_side_by_side(html)
+    html = preserve_inline_code_whitespace(html)
+    return html

@@ -82,6 +82,15 @@ function renderLab(lab) {
     el("span", { class: "arrow" }),
     lab.id,
     el(
+      "a",
+      {
+        class: "link small-btn",
+        href: `/live/${lab.id}`,
+        onclick: (ev) => ev.stopPropagation(),
+      },
+      "Live Session"
+    ),
+    el(
       "button",
       {
         class: "link small-btn lab-delete-btn",

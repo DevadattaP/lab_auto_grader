@@ -3,3 +3,5 @@ libclang>=18.1.1
 Markdown>=3.10.3
 Pygments>=2.19.2
 PyYAML>=6.0.3
+python-dotenv>=1.2.1
+filelock>=3.20.0

@@ -276,6 +276,63 @@ class IsolateSandbox(Sandbox):
         shutil.rmtree(self.meta_dir, ignore_errors=True)
 
 
+def choose_sandbox_kind(requested: str, log=None) -> str:
+    """Resolves a `--sandbox`-style choice ("auto" | "isolate" | "subprocess")
+    to the kind actually usable on this machine, via isolate_self_test --
+    shared by the batch grader (grade.py) and the live-lab platform
+    (server_student) so both apply the exact same "never silently limp
+    along on a half-working setup" rule from AUTOGRADER_DESIGN.md §5.2:
+    an explicit `isolate` request that fails the self-test is a hard error,
+    not a silent downgrade; `auto` downgrades to the degraded subprocess
+    backend but always logs loudly that it did.
+    """
+    import logging
+
+    log = log or logging.getLogger("grader.sandbox")
+
+    if requested == "subprocess":
+        log.warning(
+            "Sandbox backend forced to 'subprocess' -- filesystem/network isolation is "
+            "NOT provided, only best-effort resource limits. Use only for local testing."
+        )
+        return "subprocess"
+
+    ok, detail = isolate_self_test()
+    if requested == "isolate":
+        if not ok:
+            log.error("isolate self-test failed: %s", detail)
+            raise SystemExit(
+                "isolate was requested (--sandbox isolate) but is not usable on this machine. "
+                "See lab_auto_grader/AUTOGRADER_DESIGN.md section 5.2 for setup steps."
+            )
+        log.info("isolate self-test passed.")
+        return "isolate"
+
+    # auto
+    if ok:
+        log.info("isolate self-test passed -- using isolate as the sandbox backend.")
+        return "isolate"
+    log.warning(
+        "isolate self-test failed (%s) -- falling back to the degraded subprocess sandbox. "
+        "Memory/process-count limits will be best-effort only; see lab_auto_grader/AUTOGRADER_DESIGN.md "
+        "section 5.2 to fix isolate.",
+        detail,
+    )
+    return "subprocess"
+
+
+def make_sandbox(kind: str, box_id: int, scratch_root: Path) -> Sandbox:
+    """Factory shared by the batch grader (grade.py, one Sandbox per pool
+    worker) and the live-lab on-demand pool (sandbox_pool.py, one Sandbox per
+    concurrent Run slot) -- one place that knows how to turn a `--sandbox`
+    kind + box_id into a concrete backend instance."""
+    if kind == "isolate":
+        return IsolateSandbox(box_id=box_id)
+    work_root = Path(scratch_root) / f"worker_{box_id}"
+    work_root.mkdir(parents=True, exist_ok=True)
+    return SubprocessRlimitSandbox(work_root=work_root)
+
+
 def isolate_self_test(isolate_bin: str = "isolate", box_id: int = 0) -> tuple[bool, str]:
     """Run once at grader startup: confirm isolate can actually init+cleanup a
     box on this machine before trusting it for a real batch."""

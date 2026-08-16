@@ -33,7 +33,7 @@ from grader.discover import (
 )
 from grader.report import render_student_report, write_grade_feedback_md, write_summary_csv
 from grader.runner import grade_submission, self_check_gold
-from grader.sandbox import IsolateSandbox, Sandbox, SubprocessRlimitSandbox, isolate_self_test
+from grader.sandbox import Sandbox, choose_sandbox_kind, make_sandbox
 from grader.scorer import QuestionScore, get_test_matcher, score_question
 
 log = logging.getLogger("grader")
@@ -54,46 +54,6 @@ def _setup_logging(run_dir: Path) -> None:
 
     log.addHandler(file_handler)
     log.addHandler(console_handler)
-
-
-def _choose_sandbox_kind(requested: str) -> str:
-    if requested == "subprocess":
-        log.warning(
-            "Sandbox backend forced to 'subprocess' -- filesystem/network isolation is "
-            "NOT provided, only best-effort resource limits. Use only for local testing."
-        )
-        return "subprocess"
-
-    ok, detail = isolate_self_test()
-    if requested == "isolate":
-        if not ok:
-            log.error("isolate self-test failed: %s", detail)
-            raise SystemExit(
-                "isolate was requested (--sandbox isolate) but is not usable on this machine. "
-                "See lab_auto_grader/AUTOGRADER_DESIGN.md section 5.2 for setup steps."
-            )
-        log.info("isolate self-test passed.")
-        return "isolate"
-
-    # auto
-    if ok:
-        log.info("isolate self-test passed -- using isolate as the sandbox backend.")
-        return "isolate"
-    log.warning(
-        "isolate self-test failed (%s) -- falling back to the degraded subprocess sandbox. "
-        "Memory/process-count limits will be best-effort only; see lab_auto_grader/AUTOGRADER_DESIGN.md "
-        "section 5.2 to fix isolate.",
-        detail,
-    )
-    return "subprocess"
-
-
-def _make_sandbox(kind: str, box_id: int, scratch_root: Path) -> Sandbox:
-    if kind == "isolate":
-        return IsolateSandbox(box_id=box_id)
-    work_root = scratch_root / f"worker_{box_id}"
-    work_root.mkdir(parents=True, exist_ok=True)
-    return SubprocessRlimitSandbox(work_root=work_root)
 
 
 def _run_gold_self_checks(sandbox: Sandbox, questions: list[Question], scratch_root: Path) -> None:
@@ -158,7 +118,7 @@ def _pool_init(sandbox_kind, counter, lock, scratch_root, questions, run_dir, on
     with lock:
         box_id = counter.value
         counter.value += 1
-    _worker_sandbox = _make_sandbox(sandbox_kind, box_id, scratch_root)
+    _worker_sandbox = make_sandbox(sandbox_kind, box_id, scratch_root)
     _worker_questions = questions
     _worker_run_dir = run_dir
     _worker_only_question = only_question
@@ -233,8 +193,8 @@ def main() -> None:
     if args.check_gold:
         scratch_root = Path(tempfile.mkdtemp(prefix="grader_scratch_"))
         try:
-            sandbox_kind = _choose_sandbox_kind(args.sandbox)
-            bootstrap_sandbox = _make_sandbox(sandbox_kind, box_id=0, scratch_root=scratch_root)
+            sandbox_kind = choose_sandbox_kind(args.sandbox, log=log)
+            bootstrap_sandbox = make_sandbox(sandbox_kind, box_id=0, scratch_root=scratch_root)
             _run_gold_self_checks(bootstrap_sandbox, questions_to_check, scratch_root)
             log.info("All gold solutions pass their own tests. No submissions were touched.")
         finally:
@@ -274,9 +234,9 @@ def main() -> None:
 
     scratch_root = Path(tempfile.mkdtemp(prefix="grader_scratch_"))
     try:
-        sandbox_kind = _choose_sandbox_kind(args.sandbox)
+        sandbox_kind = choose_sandbox_kind(args.sandbox, log=log)
 
-        bootstrap_sandbox = _make_sandbox(sandbox_kind, box_id=0, scratch_root=scratch_root)
+        bootstrap_sandbox = make_sandbox(sandbox_kind, box_id=0, scratch_root=scratch_root)
         _run_gold_self_checks(bootstrap_sandbox, questions_to_check, scratch_root)
 
         if args.only_student:

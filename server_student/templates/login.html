@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab Login</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-body">
+  <div class="login-card" id="login-card">
+    <h1>Lab sign in</h1>
+    <p class="hint">Use your roll number. The first time you sign in, your password is your roll number
+      reversed, followed by <code>@Cp</code> (e.g. roll <code>12345</code> &rarr; password <code>54321@Cp</code>) --
+      you'll be asked to choose your own right after.</p>
+    <p id="device-changed-notice" class="error" hidden>
+      You were signed out because this account signed in from a different device.
+    </p>
+    <form id="login-form">
+      <label>Roll number
+        <input type="text" id="roll_no" autocomplete="username" autocapitalize="characters" required>
+      </label>
+      <label>Password
+        <input type="password" id="password" autocomplete="current-password" required>
+      </label>
+      <button type="submit">Sign in</button>
+      <p id="error" class="error" hidden></p>
+    </form>
+  </div>
+
+  <div class="login-card" id="set-password-card" hidden>
+    <h1>Choose your password</h1>
+    <p class="hint">This is a one-time step -- from now on, use this password to sign in instead of the default one.</p>
+    <form id="set-password-form">
+      <label>New password
+        <input type="password" id="new_password" autocomplete="new-password" minlength="8" required>
+      </label>
+      <label>Confirm new password
+        <input type="password" id="confirm_password" autocomplete="new-password" minlength="8" required>
+      </label>
+      <button type="submit">Save and continue</button>
+      <p id="set-password-error" class="error" hidden></p>
+    </form>
+  </div>
+
+  <script>
+    const loginCard = document.getElementById("login-card");
+    const setPasswordCard = document.getElementById("set-password-card");
+
+    function showSetPasswordStep() {
+      loginCard.hidden = true;
+      setPasswordCard.hidden = false;
+    }
+
+    (async () => {
+      const res = await fetch("/api/whoami");
+      const data = await res.json();
+      if (data.roll_no && data.must_set_password) {
+        showSetPasswordStep();
+      } else if (data.roll_no) {
+        window.location.href = "/";
+      }
+    })();
+
+    if (new URLSearchParams(window.location.search).get("reason") === "device_changed") {
+      document.getElementById("device-changed-notice").hidden = false;
+    }
+
+    const loginForm = document.getElementById("login-form");
+    const errorEl = document.getElementById("error");
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorEl.hidden = true;
+      const roll_no = document.getElementById("roll_no").value.trim();
+      const password = document.getElementById("password").value;
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roll_no, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errorEl.textContent = data.error || "Login failed.";
+        errorEl.hidden = false;
+        return;
+      }
+      if (data.must_set_password) {
+        showSetPasswordStep();
+        return;
+      }
+      window.location.href = "/";
+    });
+
+    const setPasswordForm = document.getElementById("set-password-form");
+    const setPasswordErrorEl = document.getElementById("set-password-error");
+    setPasswordForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      setPasswordErrorEl.hidden = true;
+      const new_password = document.getElementById("new_password").value;
+      const confirm_password = document.getElementById("confirm_password").value;
+      const res = await fetch("/api/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_password, confirm_password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPasswordErrorEl.textContent = data.error || "Could not set password.";
+        setPasswordErrorEl.hidden = false;
+        return;
+      }
+      window.location.href = "/";
+    });
+  </script>
+</body>
+</html>

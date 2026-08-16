@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ lab_id }} — Live Session</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/admin-static/admin.css">
+</head>
+<body>
+  <div id="app" data-lab-id="{{ lab_id }}">
+    <header class="admin-header">
+      <div><a href="/" class="link">&larr; Labs</a></div>
+      <div class="brand">Live session — <strong>{{ lab_id }}</strong></div>
+      <div id="status-pill" class="status-pill status-not_started">not started</div>
+      <div id="header-timer" class="timer"></div>
+      <button id="logout-btn" class="secondary">Sign out</button>
+    </header>
+
+    <nav class="admin-tabs">
+      <button class="admin-tab-btn active" data-tab="session">Session</button>
+      <button class="admin-tab-btn" data-tab="accounts">Accounts</button>
+      <button class="admin-tab-btn" data-tab="live">Live status</button>
+      <button class="admin-tab-btn" data-tab="finalize">Finalize &amp; results</button>
+    </nav>
+
+    <main class="admin-main">
+      <section id="tab-session" class="admin-tab-panel">
+        <h2>Session control</h2>
+        <div id="session-status-box" class="status-box"></div>
+        <div class="form-row form-row-end">
+          <label>Duration (minutes) <input type="number" id="start-duration" value="60" min="1"></label>
+          <button id="start-btn">Start session</button>
+        </div>
+        <div class="form-row form-row-end">
+          <label>Add minutes <input type="number" id="extend-minutes" value="10" min="1"></label>
+          <button id="extend-btn">Extend</button>
+        </div>
+        <div class="form-row">
+          <button id="lock-btn" class="warn-btn">Lock now (end session early)</button>
+        </div>
+        <div class="form-row">
+          <button id="reset-btn" class="danger-btn">Reset session (start over)</button>
+        </div>
+        <p id="session-msg" class="msg"></p>
+
+        <h3>After the session ends, students can see...</h3>
+        <p class="hint">Takes effect for every student within one heartbeat poll (no restart needed) -- unchecking one immediately hides and blocks that content, checking it again makes it reachable within the same window.</p>
+        <div class="form-row">
+          <label class="checkbox-label"><input type="checkbox" id="cfg-workspace" checked> Their questions, saved code, and last run results ("My work")</label>
+        </div>
+        <div class="form-row">
+          <label class="checkbox-label"><input type="checkbox" id="cfg-report" checked> Their own graded report ("My report")</label>
+        </div>
+        <div class="form-row">
+          <label class="checkbox-label"><input type="checkbox" id="cfg-leaderboard" checked> The class leaderboard</label>
+        </div>
+        <div class="form-row">
+          <button id="save-display-config-btn">Save</button>
+        </div>
+        <p id="display-config-msg" class="msg"></p>
+      </section>
+
+      <section id="tab-accounts" class="admin-tab-panel" hidden>
+        <h2>Accounts</h2>
+        <p class="hint">
+          No setup needed here -- a student's first successful login (their roll number reversed,
+          followed by <code>@Cp</code>) creates their account automatically, and they're asked to
+          choose their own password right after. This list fills in as students actually sign in.
+        </p>
+        <table id="accounts-table" class="admin-table">
+          <thead><tr><th>Roll no.</th><th>Name</th><th>Password</th><th>Device</th><th>Last seen</th><th>Actions</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section id="tab-live" class="admin-tab-panel" hidden>
+        <h2>Live status</h2>
+        <p class="hint">Refreshes every 10s. Click a cell for the full test detail.</p>
+        <div id="live-table-wrap"></div>
+      </section>
+
+      <section id="tab-finalize" class="admin-tab-panel" hidden>
+        <h2>Finalize &amp; grade</h2>
+        <p class="hint">
+          Runs the exact same batch grader used for offline grading, against everything students
+          saved/ran live. Only enabled once the session is locked. This can take a while for a full class --
+          the page will wait for it to finish.
+        </p>
+        <button id="finalize-btn" disabled>Finalize &amp; grade</button>
+        <p id="finalize-msg" class="msg"></p>
+        <pre id="finalize-output" class="output-box" hidden></pre>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="detail-modal" class="wide">
+    <div class="modal-head">
+      <strong id="detail-modal-title"></strong>
+      <button type="button" id="detail-modal-close">Close</button>
+    </div>
+    <div id="detail-modal-body" class="modal-body"></div>
+  </dialog>
+
+  <script src="/admin-static/live_dashboard.js"></script>
+</body>
+</html>

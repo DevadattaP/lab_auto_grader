@@ -1,0 +1,290 @@
+:root {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --border: #dde1e6;
+  --text: #1c2128;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --good: #16a34a;
+  --warn: #d97706;
+  --bad: #dc2626;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* --- login page --- */
+
+.login-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.login-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 32px;
+  width: 320px;
+}
+
+.login-card h1 { margin: 0 0 8px; font-size: 20px; }
+.login-card .hint { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+.login-card label { display: block; margin-bottom: 14px; font-size: 13px; color: var(--muted); }
+.login-card input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+}
+.login-card button {
+  width: 100%;
+  padding: 10px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.error { color: var(--bad); font-size: 13px; margin-top: 10px; }
+
+/* --- app shell --- */
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+header .brand { font-size: 15px; }
+header .who { font-size: 13px; color: var(--muted); }
+header .timer {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+  font-weight: 600;
+}
+button.secondary {
+  background: var(--bad);
+  color: white;
+  border: 1px solid var(--bad);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.banner {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 8px 20px;
+  font-size: 13px;
+  border-bottom: 1px solid #fde68a;
+}
+
+.centered-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  color: var(--muted);
+}
+
+#workspace-view {
+  display: flex;
+  height: calc(100vh - 52px);
+}
+
+/* Author CSS setting `display` on an element always beats the browser's
+   default `[hidden] { display: none }` rule, regardless of selector
+   specificity (origin/importance is sorted before specificity in the
+   cascade) -- so #workspace-view's own `display: flex` above silently
+   defeated `hidden`, leaving it visible underneath whichever post-session
+   view was actually selected. Every top-level view container gets an
+   explicit override here so `hidden` always wins, no matter what other
+   display rule might apply to it. */
+#waiting-view[hidden],
+#workspace-view[hidden],
+#report-view[hidden],
+#leaderboard-view[hidden],
+#nothing-view[hidden] {
+  display: none;
+}
+
+#question-list {
+  width: 220px;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  background: var(--panel);
+}
+.q-item {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.q-item:hover { background: #f0f2f5; }
+.q-item.active { background: #eaf0ff; }
+.q-item-title { font-weight: 600; font-size: 13px; }
+.q-item-sub { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+.chip {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.chip-neutral { background: #e5e7eb; color: #374151; }
+.chip-good { background: #dcfce7; color: var(--good); }
+.chip-warn { background: #fef3c7; color: var(--warn); }
+.chip-bad { background: #fee2e2; color: var(--bad); }
+
+#workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+#question-panel {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+#q-title { margin: 0 0 6px; font-size: 16px; }
+#q-description { font-size: 13px; color: var(--muted); white-space: pre-wrap; }
+
+#editor-wrap { flex: 1; min-height: 200px; }
+.CodeMirror { height: 100%; font-size: 14px; }
+
+#run-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+#run-btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 18px;
+  font-size: 14px;
+  cursor: pointer;
+}
+#run-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+.hint { color: var(--muted); font-size: 12px; }
+
+#results-panel {
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 10px 20px;
+  background: #fafbfc;
+  border-top: 1px solid var(--border);
+}
+.marks-line { font-weight: 600; margin-bottom: 8px; }
+.marks-line.marks-warn { color: var(--warn); }
+.stale-banner {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.test-row {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.test-pass { border-left: 4px solid var(--good); }
+.test-fail { border-left: 4px solid var(--bad); }
+.test-partial { border-left: 4px solid var(--warn); }
+.test-head { font-weight: 600; margin-bottom: 4px; }
+.test-io { display: flex; gap: 10px; flex-wrap: wrap; }
+.test-io > div { flex: 1; min-width: 140px; }
+.test-io span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.test-io pre {
+  margin: 2px 0 0;
+  background: #f3f4f6;
+  padding: 6px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+}
+.code-check { margin-top: 10px; font-size: 13px; }
+.code-check ul { margin: 4px 0; padding-left: 20px; }
+.code-check .warn { color: var(--bad); font-weight: 600; margin-top: 6px; }
+
+/* --- post-session top-level nav (workspace vs results, once finalized) --- */
+
+.post-session-nav {
+  display: flex;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.post-session-nav[hidden] {
+  display: none;
+}
+.post-nav-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.post-nav-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+/* --- post-session content views (My report / Leaderboard / Nothing) --- */
+
+.post-content-view { padding: 20px; max-width: 1100px; margin: 0 auto; }
+.tab-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 20px;
+}
+.tab-panel .io-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+.tab-panel .io-col { flex: 1; min-width: 140px; }
+.tab-panel .io-col-title { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.tab-panel pre {
+  background: #f3f4f6;
+  padding: 6px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.leaderboard-table { width: 100%; border-collapse: collapse; }
+.leaderboard-table th, .leaderboard-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.leaderboard-table tr.me-row td {
+  background: #eaf0ff;
+  font-weight: 600;
+}

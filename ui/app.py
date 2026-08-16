@@ -1,16 +1,20 @@
-"""Minimal local web UI for browsing/authoring lab_auto_grader labs.
+"""Question-editor web UI for lab_auto_grader labs.
 
 Serves a single page (tree view of labs -> questions/submissions/result) plus
-a small JSON API the page's JS talks to. Local-use tool: binds to
-127.0.0.1 only, no auth, and every path segment coming from a URL is
-validated against a safe-name pattern before touching the filesystem.
+a small JSON API the page's JS talks to. Every path segment coming from a
+URL is validated against a safe-name pattern before touching the
+filesystem.
 
-Run with:  python3 -m ui.app        (from the lab_auto_grader directory)
+Structured as a Flask Blueprint (`bp`) rather than a standalone app so
+server_admin/app.py can mount it behind admin login -- see that module's
+docstring. Run standalone for local, unauthenticated use (binds to
+127.0.0.1 only, matching this module's original design):
+
+    python3 -m ui.app        (from the lab_auto_grader directory)
 """
 
 from __future__ import annotations
 
-import ast
 import csv
 import html as html_escape
 import io
@@ -19,9 +23,8 @@ import shutil
 import sys
 from pathlib import Path
 
-import markdown as markdown_lib
 import yaml
-from flask import Flask, abort, jsonify, request, send_from_directory
+from flask import Blueprint, Flask, abort, jsonify, request, send_from_directory
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import CLexer
@@ -35,8 +38,13 @@ sys.path.insert(0, str(lab_auto_grader_ROOT))
 from grader.code_checks import KNOWN_BUILTIN_CONSTRUCTS  # noqa: E402
 from grader.config_schema import QuestionConfigError, load_question  # noqa: E402
 from grader.discover import find_question_file  # noqa: E402
+from grader.report import render_markdown_to_html  # noqa: E402
 
-app = Flask(__name__)
+# static_url_path="/static" (not the blueprint-namespaced default
+# "/ui/static") so this serves at the exact same URL whether run standalone
+# or mounted inside server_admin -- ui/templates/index.html's asset
+# references ("/static/app.js") never need to change either way.
+bp = Blueprint("ui", __name__, static_folder="static", static_url_path="/static", template_folder="templates")
 
 SAFE_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
 
@@ -222,7 +230,7 @@ def _build_dashboard(
     return {"by_question": by_question, "by_student": by_student}
 
 
-@app.get("/api/tree")
+@bp.get("/api/tree")
 def api_tree():
     return jsonify(build_tree())
 
@@ -232,7 +240,7 @@ def api_tree():
 # --------------------------------------------------------------------------
 
 
-@app.post("/api/labs")
+@bp.post("/api/labs")
 def api_create_lab():
     lab_id = _safe_name((request.json or {}).get("id", "").strip())
     q_dir, s_dir, r_dir = _lab_dirs(lab_id)
@@ -243,7 +251,7 @@ def api_create_lab():
     return jsonify({"id": lab_id}), 201
 
 
-@app.delete("/api/labs/<lab_id>")
+@bp.delete("/api/labs/<lab_id>")
 def api_delete_lab(lab_id: str):
     q_dir, s_dir, r_dir = _lab_dirs(lab_id)
     for d in (q_dir, s_dir, r_dir):
@@ -257,7 +265,7 @@ def api_delete_lab(lab_id: str):
 # --------------------------------------------------------------------------
 
 
-@app.get("/api/meta")
+@bp.get("/api/meta")
 def api_meta():
     """Static option lists the question-editor form needs -- kept server-side
     so the frontend never hardcodes a second copy of what code_checks.py or
@@ -504,7 +512,7 @@ def _rollback(yaml_path: Path, gold_path: Path, old_yaml: str | None, old_gold: 
         qdir.rmdir()
 
 
-@app.get("/api/labs/<lab_id>/questions/<qid>")
+@bp.get("/api/labs/<lab_id>/questions/<qid>")
 def api_get_question(lab_id: str, qid: str):
     q_dir, _, _ = _lab_dirs(lab_id)
     qid = _safe_name(qid)
@@ -514,7 +522,7 @@ def api_get_question(lab_id: str, qid: str):
     return jsonify(question_to_payload(qdir))
 
 
-@app.post("/api/labs/<lab_id>/questions/<qid>")
+@bp.post("/api/labs/<lab_id>/questions/<qid>")
 def api_save_question(lab_id: str, qid: str):
     q_dir, _, _ = _lab_dirs(lab_id)
     qid = _safe_name(qid)
@@ -546,7 +554,7 @@ def api_save_question(lab_id: str, qid: str):
     return jsonify({"id": qid})
 
 
-@app.delete("/api/labs/<lab_id>/questions/<qid>")
+@bp.delete("/api/labs/<lab_id>/questions/<qid>")
 def api_delete_question(lab_id: str, qid: str):
     q_dir, _, _ = _lab_dirs(lab_id)
     qid = _safe_name(qid)
@@ -561,7 +569,7 @@ def api_delete_question(lab_id: str, qid: str):
 # --------------------------------------------------------------------------
 
 
-@app.get("/api/labs/<lab_id>/submissions/<student>/<filename>")
+@bp.get("/api/labs/<lab_id>/submissions/<student>/<filename>")
 def api_view_submission_file(lab_id: str, student: str, filename: str):
     _, s_dir, _ = _lab_dirs(lab_id)
     student = _safe_name(student)
@@ -615,78 +623,15 @@ def _highlight_c(text: str) -> str:
     return highlight(text, CLexer(), formatter)
 
 
-# grader/report.py writes a failed/partial test's input/expected/actual as
-# three consecutive list items via Python's repr() -- e.g.
-# `'*******\n *****\n  ***\n   *\n'` -- specifically so a real newline or
-# run of spaces is visible as literal `\n`/spaces in the raw .md file
-# (readable in a plain editor/terminal). Markdown then renders that as
-# three separate <li>label: <code>'...'</code></li> items stacked
-# vertically, each showing its repr'd text as one long line with literal
-# backslash-n *characters* in it, not an actual line break. This matches
-# all three together (report.py always emits them as this exact
-# input/expected/actual triplet, nothing else interleaved) and replaces
-# them with one flex row of three bordered, titled columns -- decoding
-# each field's repr text back to its real bytes and rendering it in a
-# <pre> so a multi-line value (a pyramid's rows, a multi-line Secret Pair
-# report, ...) shows real line breaks and indentation, side by side for
-# easy comparison instead of stacked and hard to visually diff. Falls back
-# to leaving the original three <li>s untouched if any field isn't valid
-# repr() syntax (defensive -- should never happen against report.py's own
-# output, but this is markdown someone could hand-edit).
-_IO_TRIPLET_RE = re.compile(
-    r"<ul>\s*"
-    r"<li>input: <code>(.*?)</code></li>\s*"
-    r"<li>expected: <code>(.*?)</code></li>\s*"
-    r"<li>actual: <code>(.*?)</code></li>\s*"
-    r"</ul>",
-    re.DOTALL,
-)
+# Markdown->HTML rendering for a report.py .md file (side-by-side
+# input/expected/actual columns, whitespace-preserving inline <code> spans)
+# now lives in grader.report.render_markdown_to_html -- shared with
+# server_student's "My Report" page and server_admin's live dashboard
+# instead of being duplicated per UI. See that function's docstring for the
+# rationale behind each postprocessing step.
 
 
-def _render_io_side_by_side(html: str) -> str:
-    def repl(m: re.Match) -> str:
-        cols = []
-        for label, code_content in zip(("input", "expected", "actual"), m.groups()):
-            raw_repr = html_escape.unescape(code_content)
-            try:
-                value = ast.literal_eval(raw_repr)
-            except (ValueError, SyntaxError):
-                return m.group(0)
-            cols.append(
-                f'<div class="io-col"><div class="io-col-title">{label}</div>'
-                f"<pre>{html_escape.escape(value)}</pre></div>"
-            )
-        return f'<div class="io-row">{"".join(cols)}</div>'
-
-    return _IO_TRIPLET_RE.sub(repl, html)
-
-
-# Markdown wraps a `` `...` `` span as a bare <code>...</code> with no
-# white-space CSS override, so consecutive literal spaces inside one (e.g. a
-# test *name* like `pair_AK` glued to surrounding punctuation) collapse
-# down to a single visible space when a browser renders the HTML -- even
-# though the text node itself still has all of them. A ```fenced``` block
-# renders as <pre><code>...</code></pre> instead, which already preserves
-# whitespace via `.modal-body pre { white-space: pre-wrap }` in style.css,
-# so that's left alone here (matched by the first branch, kept verbatim).
-# Only a bare inline span (second branch) gets its regular spaces swapped
-# for &nbsp; -- sidesteps whitespace-collapsing at the HTML level so it
-# doesn't matter what CSS the page embedding this HTML does or doesn't
-# apply. Run _render_io_side_by_side first so the input/expected/actual
-# fields it already converted to <pre> (which don't need this trick at all)
-# aren't also matched here.
-_CODE_SPAN_RE = re.compile(r"(<pre><code>.*?</code></pre>)|(<code>.*?</code>)", re.DOTALL)
-
-
-def _preserve_inline_code_whitespace(html: str) -> str:
-    def repl(m: re.Match) -> str:
-        inline_span = m.group(2)
-        return inline_span.replace(" ", "&nbsp;") if inline_span is not None else m.group(1)
-
-    return _CODE_SPAN_RE.sub(repl, html)
-
-
-@app.get("/api/labs/<lab_id>/dashboard/<qid>/<student>")
+@bp.get("/api/labs/<lab_id>/dashboard/<qid>/<student>")
 def api_dashboard_detail(lab_id: str, qid: str, student: str):
     q_dir, s_dir, r_dir = _lab_dirs(lab_id)
     qid = _safe_name(qid)
@@ -720,9 +665,7 @@ def api_dashboard_detail(lab_id: str, qid: str, student: str):
         if report_path is not None:
             section = _extract_report_section(report_path.read_text(errors="replace"), qid)
             if section is not None:
-                report_html = markdown_lib.markdown(section, extensions=["fenced_code", "tables"], tab_length=2)
-                report_html = _render_io_side_by_side(report_html)
-                report_html = _preserve_inline_code_whitespace(report_html)
+                report_html = render_markdown_to_html(section)
 
     return jsonify(
         {
@@ -740,7 +683,7 @@ def api_dashboard_detail(lab_id: str, qid: str, student: str):
 # --------------------------------------------------------------------------
 
 
-@app.get("/api/labs/<lab_id>/result/<filename>")
+@bp.get("/api/labs/<lab_id>/result/<filename>")
 def api_view_result_file(lab_id: str, filename: str):
     _, _, r_dir = _lab_dirs(lab_id)
     filename = _safe_name(filename)
@@ -754,14 +697,7 @@ def api_view_result_file(lab_id: str, filename: str):
     content = path.read_text(errors="replace")
 
     if filename.endswith(".md"):
-        # report.py nests list items with 2 spaces (correct, CommonMark-style --
-        # renders fine on GitHub/VS Code). Python-Markdown's default tab_length
-        # is 4, so without this it silently flattens every nested list (the
-        # per-test PASS/FAIL bullets, and the input/expected/actual bullets
-        # nested under a failed open test) into one single-level list.
-        rendered = markdown_lib.markdown(content, extensions=["fenced_code", "tables"], tab_length=2)
-        rendered = _render_io_side_by_side(rendered)
-        rendered = _preserve_inline_code_whitespace(rendered)
+        rendered = render_markdown_to_html(content)
         return jsonify({"filename": filename, "kind": "markdown", "html": rendered})
 
     if filename.endswith(".csv"):
@@ -778,10 +714,22 @@ def api_view_result_file(lab_id: str, filename: str):
 # --------------------------------------------------------------------------
 
 
-@app.get("/")
+@bp.get("/")
 def index():
     return send_from_directory(Path(__file__).resolve().parent / "templates", "index.html")
 
 
+def _standalone_app() -> Flask:
+    """Used only by `python -m ui.app` -- server_admin instead imports `bp`
+    directly and registers it on its own (admin-login-gated) Flask app, so
+    this app-construction path is never shared with it. static_folder=None
+    here so the standalone app doesn't also try to claim "/static" itself
+    -- the blueprint's own static_url_path="/static" (set above) already
+    serves it."""
+    standalone = Flask(__name__, static_folder=None)
+    standalone.register_blueprint(bp)
+    return standalone
+
+
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    _standalone_app().run(host="127.0.0.1", port=5000, debug=False)

@@ -1,0 +1,236 @@
+:root {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --border: #dde1e6;
+  --text: #1c2128;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --good: #16a34a;
+  --warn: #d97706;
+  --bad: #dc2626;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* --- login page (shared look with server_student's login) --- */
+
+.login-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+.login-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 32px;
+  width: 320px;
+}
+.login-card h1 { margin: 0 0 16px; font-size: 20px; }
+.login-card label { display: block; margin-bottom: 14px; font-size: 13px; color: var(--muted); }
+.login-card input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+}
+.login-card button {
+  width: 100%;
+  padding: 10px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.error { color: var(--bad); font-size: 13px; margin-top: 10px; }
+
+/* --- admin shell --- */
+
+a.link { color: var(--accent); text-decoration: none; }
+a.link:hover { text-decoration: underline; }
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.admin-header .brand { font-size: 15px; }
+.admin-header .timer { font-variant-numeric: tabular-nums; font-size: 14px; color: var(--muted); }
+button.secondary {
+  margin-left: auto;
+  background: var(--bad);
+  color: white;
+  border: 1px solid var(--bad);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.status-not_started { background: #e5e7eb; color: #374151; }
+.status-running { background: #dcfce7; color: var(--good); }
+.status-locked { background: #fef3c7; color: var(--warn); }
+.status-finalized { background: #dbeafe; color: #1d4ed8; }
+
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.admin-tab-btn {
+  border: 1px solid var(--border);
+  border-bottom: none;
+  background: var(--bg);
+  color: var(--muted);
+  padding: 8px 16px;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  font-size: 13px;
+}
+.admin-tab-btn.active { background: var(--panel); color: var(--text); font-weight: 600; }
+
+/* Not centered with a narrow max-width -- on a normal-size window that left
+   a wide, oddly sidebar-like dead zone on both sides of the actual
+   content. Flush padding instead, capped only so a line of text doesn't
+   stretch unreadably wide on a very large monitor. */
+.admin-main { padding: 20px 24px; max-width: 1400px; }
+.admin-tab-panel h2 { margin-top: 0; }
+
+.status-box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+/* .form-row's default `align-items: center` centers each item's *whole*
+   box -- fine for a single-line label or a lone button, but wrong for a
+   text-above-input label (two lines tall) paired with a single-line
+   button: centering against the label's full height leaves the button
+   floating between the label text and the input instead of level with
+   the input itself. flex-end bottom-aligns both instead, which is what
+   actually lines the button up with the input box. (A plain margin-top
+   on the button doesn't fix this: centering still applies to the
+   button's full margin box, so a top margin just re-centers a taller
+   box, it doesn't anchor it to the input.) */
+.form-row-end {
+  align-items: flex-end;
+}
+.form-row label { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+/* .form-row label's column direction above is for a text-above-input label
+   ("Duration (minutes)" over a number field) -- wrong for a checkbox,
+   where the checkbox and its own text belong in a row, checkbox first.
+   Each checkbox still gets its own .form-row, so multiple checkboxes
+   still stack one below another; this only fixes the *inside* of one.
+   ".form-row label.checkbox-label" (not just ".checkbox-label") so this
+   outweighs ".form-row label" by specificity instead of needing !important. */
+.form-row label.checkbox-label {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.checkbox-label input[type="checkbox"] {
+  flex: none;
+  width: auto;
+  margin: 0;
+}
+.form-row input[type="number"] { width: 100px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; }
+.form-row textarea {
+  width: 320px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 13px;
+}
+
+button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+button:disabled { background: #9ca3af; cursor: not-allowed; }
+button.warn-btn { background: var(--warn); }
+button.danger-btn { background: var(--bad); }
+
+.msg { font-size: 13px; color: var(--muted); }
+.output-box {
+  background: #0b1020;
+  color: #d1d5db;
+  padding: 12px;
+  border-radius: 6px;
+  max-height: 300px;
+  overflow: auto;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.admin-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.admin-table th, .admin-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.admin-table td button { padding: 4px 10px; font-size: 12px; margin-right: 6px; }
+
+.hint { color: var(--muted); font-size: 13px; }
+
+/* --- live status grid --- */
+
+table.live-grid { border-collapse: collapse; width: 100%; font-size: 12px; }
+table.live-grid th, table.live-grid td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+table.live-grid th.roll-col, table.live-grid td.roll-col { text-align: left; white-space: nowrap; }
+td.cell-clickable { cursor: pointer; }
+td.cell-neutral { color: var(--muted); }
+td.cell-good { background: #dcfce7; color: var(--good); font-weight: 600; }
+td.cell-warn { background: #fef3c7; color: var(--warn); font-weight: 600; }
+td.cell-bad { background: #fee2e2; color: var(--bad); font-weight: 600; }
+.device-yes { color: var(--good); }
+.device-offline { color: var(--bad); }
+.device-no { color: var(--muted); }
