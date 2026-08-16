@@ -1,0 +1,64 @@
+id: q01_result_grade
+title: Pass/Fail/Invalid classifier
+description: |
+  Write a C program that takes an integer input representing a student's marks and determines their result: PASS if marks are between 40 and 100 inclusive, FAIL if between 0 and 39 inclusive, INVALID otherwise.
+filename_patterns: [q1.c, question1.c, Q1.c, Question1.c, q01.c, Question01.c, Q01.c]
+marks:
+  open: 0
+  hidden: 3
+compile:
+  standard: c11
+  flags: [-Wall, -O2]
+limits:
+  time_seconds: 1
+  wall_seconds: 1
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+adjust_char_input: true
+adjust_scanf_address: true
+tests:
+  open:
+  - name: sample_pass
+    in: '75'
+    out: PASS
+    weight: 0
+  - name: sample_fail
+    in: '35'
+    out: FAIL
+    weight: 0
+  - name: sample_invalid_high
+    in: '105'
+    out: INVALID
+    weight: 0
+  - name: sample_boundary_40
+    in: '40'
+    out: PASS
+    weight: 0
+  hidden:
+  - name: boundary_0
+    in: '0'
+    out: FAIL
+    weight: 0.6
+  - name: boundary_100
+    in: '100'
+    out: PASS
+    weight: 0.6
+  - name: boundary_101
+    in: '101'
+    out: INVALID
+    weight: 0.6
+  - name: invalid_negative
+    in: '-5'
+    out: INVALID
+    weight: 0.6
+  - name: boundary_39
+    in: '39'
+    out: FAIL
+    weight: 0.6

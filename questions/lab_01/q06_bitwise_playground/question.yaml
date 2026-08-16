@@ -1,0 +1,87 @@
+id: q06_bitwise_playground
+title: 'Bitwise Playground: Odd/Even and Case Swap'
+description: |
+  Part A: read an integer and print ODD or EVEN using the bitwise AND operator (&) instead of the modulo operator (%). Part B: read a single alphabet character and toggle its case using the bitwise XOR operator (^) with 32, instead of if-else or ctype.h functions (toupper/tolower). If the second line is not an alphabet letter, print "INVALID CHARACTER" instead of attempting to toggle its case.
+filename_patterns: [q6.c, question6.c, Q6.c, bitwise.c, Q06.c, Question06.c, q06.c]
+marks:
+  open: 0
+  hidden: 6
+compile:
+  standard: c11
+  flags: [-Wall, -O2]
+limits:
+  time_seconds: 1
+  wall_seconds: 1
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: line_gate
+  require: [bitwise_and, bitwise_xor]
+  require_match: all
+  forbid: [modulo]
+  line_gate:
+    0: bitwise_and
+    1: bitwise_xor
+tests:
+  open:
+  - name: odd_lowercase
+    in: |
+      7
+      g
+    out: |
+      ODD
+      G
+    weight: 0
+  - name: even_uppercase
+    in: |
+      10
+      Z
+    out: |
+      EVEN
+      z
+    weight: 0
+  - name: odd_non_alpha
+    in: |
+      7
+      5
+    out: |
+      ODD
+      INVALID CHARACTER
+    weight: 0
+  hidden:
+  - name: zero_even
+    in: |
+      0
+      a
+    out: |
+      EVEN
+      A
+    weight: 2
+    partial: true
+  - name: negative_odd
+    in: |
+      -3
+      M
+    out: |
+      ODD
+      m
+    weight: 2
+    partial: true
+  - name: even_non_alpha
+    in: |
+      4
+      @
+    out: |
+      EVEN
+      INVALID CHARACTER
+    weight: 2
+    partial: true
+    ignore_typo: true

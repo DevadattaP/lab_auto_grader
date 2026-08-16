@@ -1,0 +1,99 @@
+id: q07_rock_paper_scissors
+title: Rock Paper Scissors
+description: |
+  Write a C program that reads Player 1's and Player 2's choices (R, P, or S, one per line) and determines the winner using switch statements. Rock beats Scissors, Scissors beats Paper, Paper beats Rock. Print "DRAW" if both choices match, "INVALID INPUT" if either choice isn't R/P/S, otherwise "PLAYER 1 WINS" or "PLAYER 2 WINS".
+filename_patterns: [q7.c, question7.c, Q7.c, rock_paper_scissors.c, Q07.c, Question07.c,
+  q07.c]
+marks:
+  open: 0
+  hidden: 10
+compile:
+  standard: c11
+  flags: [-Wall, -O2]
+limits:
+  time_seconds: 1
+  wall_seconds: 1
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: gate
+  require: [case, switch]
+  require_match: all
+  forbid: []
+tests:
+  open:
+  - name: rock_beats_scissors
+    in: |
+      R
+      S
+    out: PLAYER 1 WINS
+    weight: 0
+  - name: scissors_beats_paper
+    in: |
+      P
+      S
+    out: PLAYER 2 WINS
+    weight: 0
+  - name: draw
+    in: |
+      R
+      R
+    out: DRAW
+    weight: 0
+  - name: invalid_player1
+    in: |
+      X
+      P
+    out: INVALID INPUT
+    weight: 0
+  - name: paper_beats_rock
+    in: |
+      P
+      R
+    out: PLAYER 1 WINS
+    weight: 0
+  hidden:
+  - name: scissors_loses_to_rock
+    in: |
+      S
+      R
+    out: PLAYER 2 WINS
+    weight: 2
+    ignore_typo: true
+  - name: scissors_beats_paper_2
+    in: |
+      S
+      P
+    out: PLAYER 1 WINS
+    weight: 2
+    ignore_typo: true
+  - name: rock_loses_to_paper
+    in: |
+      R
+      P
+    out: PLAYER 2 WINS
+    weight: 2
+    ignore_typo: true
+  - name: invalid_player2
+    in: |
+      R
+      Y
+    out: INVALID INPUT
+    weight: 2
+    ignore_typo: true
+  - name: draw_scissors
+    in: |
+      S
+      S
+    out: DRAW
+    weight: 2
+    ignore_typo: true

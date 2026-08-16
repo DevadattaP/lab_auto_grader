@@ -1,0 +1,124 @@
+id: q1_secret_pair_detector
+title: Secret Pair Detector
+description: |
+  Write a C program that reads two characters and prints their ASCII values. If the absolute difference between their ASCII values is exactly 10, print "SECRET PAIR FOUND" followed by a Secret Code formed by concatenating the first character, the second character, and the ASCII value of the first character. Otherwise print "NO SECRET PAIR".
+filename_patterns: [q1.c, q01.c, Q01.c, question1.c, Q1.c, secret_pair_detector.c]
+marks:
+  open: 0
+  hidden: 10
+compile:
+  standard: c11
+  flags: [-Wall, -O2, -lm]
+limits:
+  time_seconds: 2
+  wall_seconds: 5
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+  symbol_groups: [[":", "="]]
+adjust_char_input: true
+adjust_scanf_address: true
+tests:
+  open:
+  - name: pair_AK
+    in: |
+      A
+      K
+    out: |
+      Character 1 : A (65)
+      Character 2 : K (75)
+
+      SECRET PAIR FOUND
+      Secret Code : AK65
+    weight: 0
+  - name: pair_bl
+    in: |
+      b
+      l
+    out: |
+      Character 1 : b (98)
+      Character 2 : l (108)
+
+      SECRET PAIR FOUND
+      Secret Code : bl98
+    weight: 0
+  - name: no_pair_AD
+    in: |
+      A
+      D
+    out: |
+      Character 1 : A (65)
+      Character 2 : D (68)
+
+      NO SECRET PAIR
+    weight: 0
+  hidden:
+  - name: pair_reversed_KA
+    in: |
+      K
+      A
+    out: |
+      Character 1 : K (75)
+      Character 2 : A (65)
+
+      SECRET PAIR FOUND
+      Secret Code : KA75
+    weight: 2
+    partial: true
+    ignore_typo: true
+  - name: no_pair_zA
+    in: |
+      z
+      A
+    out: |
+      Character 1 : z (122)
+      Character 2 : A (65)
+
+      NO SECRET PAIR
+    weight: 2
+    partial: true
+    ignore_typo: true
+  - name: pair_ak
+    in: |
+      a
+      k
+    out: |
+      Character 1 : a (97)
+      Character 2 : k (107)
+
+      SECRET PAIR FOUND
+      Secret Code : ak97
+    weight: 2
+    partial: true
+    ignore_typo: true
+  - name: no_pair_digits
+    in: |
+      0
+      9
+    out: |
+      Character 1 : 0 (48)
+      Character 2 : 9 (57)
+
+      NO SECRET PAIR
+    weight: 2
+    partial: true
+    ignore_typo: true
+  - name: pair_ZP
+    in: |
+      Z
+      P
+    out: |
+      Character 1 : Z (90)
+      Character 2 : P (80)
+
+      SECRET PAIR FOUND
+      Secret Code : ZP90
+    weight: 2
+    partial: true
+    ignore_typo: true

@@ -1,0 +1,87 @@
+id: q09_reverse_palindrome
+title: Reverse Digits and Check Palindrome
+description: |
+  Write a C program that reads an integer N, reverses its digits using a for loop (no arrays/strings), and prints "Reversed = X". If N is negative, reverse the digits of its magnitude and print the reversed value with a negative sign; a negative number is never a palindrome. Trailing zeros become dropped leading zeros when reversed. Print "PALINDROME" on the next line if N is a non-negative number that reads the same forward and backward, otherwise "NOT PALINDROME".
+filename_patterns: [q9.c, question9.c, Q9.c, reverse_palindrome.c, Q09.c, Question09.c,
+  q09.c]
+marks:
+  open: 0
+  hidden: 10
+compile:
+  standard: c11
+  flags: [-Wall, -O2]
+limits:
+  time_seconds: 1
+  wall_seconds: 1
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: gate
+  require: [for_loop, modulo]
+  require_match: all
+  forbid: [do_while, while_loop]
+tests:
+  open:
+  - name: palindrome_121
+    in: '121'
+    out: |
+      Reversed = 121
+      PALINDROME
+    weight: 0
+  - name: not_palindrome_123
+    in: '123'
+    out: |
+      Reversed = 321
+      NOT PALINDROME
+    weight: 0
+  - name: trailing_zero_120
+    in: '120'
+    out: |
+      Reversed = 21
+      NOT PALINDROME
+    weight: 0
+  hidden:
+  - name: negative_121
+    in: '-121'
+    out: |
+      Reversed = -121
+      NOT PALINDROME
+    weight: 2
+    ignore_typo: true
+  - name: palindrome_757
+    in: '757'
+    out: |
+      Reversed = 757
+      PALINDROME
+    weight: 2
+    ignore_typo: true
+  - name: zero
+    in: '0'
+    out: |
+      Reversed = 0
+      PALINDROME
+    weight: 2
+    ignore_typo: true
+  - name: trailing_zeros_8900
+    in: '8900'
+    out: |
+      Reversed = 98
+      NOT PALINDROME
+    weight: 2
+    ignore_typo: true
+  - name: not_palindrome_2121
+    in: '2121'
+    out: |
+      Reversed = 1212
+      NOT PALINDROME
+    weight: 2
+    ignore_typo: true

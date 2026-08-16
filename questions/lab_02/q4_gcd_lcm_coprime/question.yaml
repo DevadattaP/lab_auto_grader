@@ -1,0 +1,108 @@
+id: q4_gcd_lcm_coprime
+title: GCD, LCM and Coprime Check
+description: |
+  Write a C program that reads two positive integers a and b (one line, space-separated), computes their GCD via the Euclidean Algorithm using a while loop, then their LCM as (a / gcd) * b. Print "GCD = X" then "LCM = Y", then "Coprime" if GCD == 1, else "Not Coprime". If either a or b is <= 0, print "INVALID INPUT".
+filename_patterns: [q4.c, q04.c, Q04.c, question4.c, Q4.c, gcd_lcm_coprime.c]
+marks:
+  open: 0
+  hidden: 10
+compile:
+  standard: c11
+  flags: [-Wall, -O2, -lm]
+limits:
+  time_seconds: 2
+  wall_seconds: 5
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+  # "Coprime" is a complete substring of the opposite (wrong) answer "Not Coprime" 
+  # -- without this, partial: true's lenient single-line search could credit a wrong "Not Coprime" as if it said "Coprime". 
+  # Forces these two lines back onto exact whole-line matching; 
+  # every other line on this question (GCD = X, LCM = Y) still gets the lenient search, 
+  # and is separately protected by the digit-adjacency guard regardless.
+  strict_lines: ["Coprime", "Not Coprime"]
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: penalty
+  require: [while_loop]
+  require_match: any
+  forbid: []
+  penalty: 5
+tests:
+  open:
+  - name: not_coprime_12_18
+    in: 12 18
+    out: |
+      GCD = 6
+      LCM = 36
+      Not Coprime
+    weight: 0
+  - name: coprime_7_13
+    in: 7 13
+    out: |
+      GCD = 1
+      LCM = 91
+      Coprime
+    weight: 0
+  - name: equal_values
+    in: 5 5
+    out: |
+      GCD = 5
+      LCM = 5
+      Not Coprime
+    weight: 0
+  - name: invalid_zero
+    in: 0 5
+    out: |
+      INVALID INPUT
+    weight: 0
+  hidden:
+  - name: coprime_ones
+    in: 1 1
+    out: |
+      GCD = 1
+      LCM = 1
+      Coprime
+    weight: 2
+    partial: true
+    ignore_typo: true
+  - name: not_coprime_100_75
+    in: 100 75
+    out: |
+      GCD = 25
+      LCM = 300
+      Not Coprime
+    weight: 2
+    partial: true
+    ignore_typo: true
+  - name: invalid_negative
+    in: -3 4
+    out: |
+      INVALID INPUT
+    weight: 2
+    ignore_typo: true
+  - name: coprime_primes
+    in: 17 19
+    out: |
+      GCD = 1
+      LCM = 323
+      Coprime
+    weight: 2
+    partial: true
+    ignore_typo: true
+  - name: not_coprime_48_18
+    in: 48 18
+    out: |
+      GCD = 6
+      LCM = 144
+      Not Coprime
+    weight: 2
+    partial: true
+    ignore_typo: true

@@ -1,0 +1,99 @@
+id: q05_vending_change
+title: Vending Machine Change Calculator
+description: |
+  Write a C program that reads the price of an item and the amount inserted (both integers, in rupees). If amount < price, print "INSUFFICIENT FUNDS, need X more". If amount == price, print "EXACT PAYMENT, ENJOY!". If amount > price, greedily break the change into 100/50/20/10/5/1 rupee denominations (largest first), printing "DENOMINATION x COUNT" one per line, skipping any denomination whose count is 0. Negative price or amount prints "INVALID INPUT".
+filename_patterns: [q5.c, question5.c, Q5.c, change.c, Q05.c, Question05.c, q05.c]
+marks:
+  open: 0
+  hidden: 10
+compile:
+  standard: c11
+  flags: [-Wall, -O2]
+limits:
+  time_seconds: 1
+  wall_seconds: 1
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+  symbol_groups: [["x", "X", "*"]]
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: gate
+  require: [else, if, if_else]
+  require_match: any
+  forbid: [do_while, for_loop, while_loop]
+tests:
+  open:
+  - name: mixed_denominations
+    in: |
+      37
+      100
+    out: |
+      50 x 1
+      10 x 1
+      1 x 3
+    weight: 0
+  - name: exact_payment
+    in: |
+      50
+      50
+    out: |
+      EXACT PAYMENT, ENJOY!
+    weight: 0
+  - name: insufficient_funds
+    in: |
+      80
+      60
+    out: |
+      INSUFFICIENT FUNDS, need 20 more
+    weight: 0
+  hidden:
+  - name: zero_price_and_amount
+    in: |
+      0
+      0
+    out: |
+      EXACT PAYMENT, ENJOY!
+    weight: 2
+    ignore_typo: true
+  - name: large_change_all_denominations
+    in: |
+      1
+      1000
+    out: |
+      100 x 9
+      50 x 1
+      20 x 2
+      5 x 1
+      1 x 4
+    weight: 2
+  - name: single_rupee_change
+    in: |
+      99
+      100
+    out: |
+      1 x 1
+    weight: 2
+  - name: insufficient_funds_small
+    in: |
+      30
+      20
+    out: |
+      INSUFFICIENT FUNDS, need 10 more
+    weight: 2
+    ignore_typo: true
+  - name: invalid_negative_price
+    in: |
+      -538
+      1000
+    out: |
+      INVALID INPUT
+    weight: 2
+    ignore_typo: true

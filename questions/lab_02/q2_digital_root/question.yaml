@@ -1,0 +1,92 @@
+id: q2_digital_root
+title: Digital Root of a Number
+description: |
+  Write a C program that reads an integer n and computes its digital root (repeatedly sum the digits until a single digit remains), using a do-while loop for the outer summation and a while loop to extract digits. Print "Digital Root = X" then "Rounds = Y" (the number of summation rounds; 0 if n already has a single digit). If n < 0, print "INVALID INPUT".
+filename_patterns: [q2.c, q02.c, Q02.c, question2.c, Q2.c, digital_root.c]
+marks:
+  open: 0
+  hidden: 10
+compile:
+  standard: c11
+  flags: [-Wall, -O2, -lm]
+limits:
+  time_seconds: 2
+  wall_seconds: 5
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+  symbol_groups: [[':', '=']]
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: penalty
+  require: [do_while, while_loop]
+  require_match: all
+  forbid: []
+  penalty: 5
+tests:
+  open:
+  - name: multi_round_9875
+    in: '9875'
+    out: |
+      Digital Root = 2
+      Rounds = 3
+    weight: 0
+  - name: single_digit
+    in: '5'
+    out: |
+      Digital Root = 5
+      Rounds = 0
+    weight: 0
+  - name: one_round_billion
+    in: '1000000000'
+    out: |
+      Digital Root = 1
+      Rounds = 1
+    weight: 0
+  - name: invalid_negative
+    in: '-7'
+    out: |
+      INVALID INPUT
+    weight: 0
+  hidden:
+  - name: two_rounds_all_nines
+    in: '999999999'
+    out: |
+      Digital Root = 9
+      Rounds = 2
+    weight: 2
+    ignore_typo: true
+  - name: zero
+    in: '0'
+    out: |
+      Digital Root = 0
+      Rounds = 0
+    weight: 2
+    ignore_typo: true
+  - name: invalid_negative_large
+    in: '-9090'
+    out: |
+      INVALID INPUT
+    weight: 2
+    ignore_typo: true
+  - name: two_rounds_12345
+    in: '12345'
+    out: |
+      Digital Root = 6
+      Rounds = 2
+    weight: 2
+    ignore_typo: true
+  - name: one_round_100
+    in: '100'
+    out: |
+      Digital Root = 1
+      Rounds = 1
+    weight: 2
+    ignore_typo: true

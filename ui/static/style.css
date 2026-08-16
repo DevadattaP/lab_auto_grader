@@ -1,0 +1,302 @@
+/* Deliberately minimal: white background, black text, no custom fonts,
+   no color beyond black/white/gray borders. Structure only. */
+
+body {
+  background: #fff;
+  color: #000;
+  margin: 1.5rem;
+}
+
+#tree-root {
+  max-width: 900px;
+}
+
+/* --- tree --- */
+
+ul.tree {
+  list-style: none;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+ul.tree.root {
+  padding-left: 0;
+}
+
+.tree li {
+  margin: 0.15rem 0;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.row-label {
+  cursor: pointer;
+}
+
+.row-label.leaf {
+  cursor: pointer;
+}
+
+button.link {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+button {
+  font: inherit;
+}
+
+.small-btn {
+  font-size: 0.85em;
+  margin-left: 0.5rem;
+}
+
+.empty {
+  color: #000;
+  font-style: italic;
+}
+
+summary {
+  cursor: pointer;
+}
+
+summary::marker {
+  content: none;
+}
+
+summary .arrow {
+  display: inline-block;
+  width: 1em;
+}
+
+details > summary .arrow::before {
+  content: "\25b8 "; /* ▸ */
+}
+
+details[open] > summary .arrow::before {
+  content: "\25be "; /* ▾ */
+}
+
+/* lab delete button only visible while that lab is expanded */
+.lab-delete-btn {
+  display: none;
+}
+
+details[open] > summary .lab-delete-btn {
+  display: inline;
+}
+
+/* --- dialogs / modals --- */
+
+dialog {
+  border: 1px solid #000;
+  width: min(900px, 92vw);
+  max-height: 88vh;
+  padding: 0;
+}
+
+dialog.wide {
+  width: min(1400px, 96vw);
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #000;
+  padding: 0.6rem 0.8rem;
+}
+
+.modal-body {
+  padding: 0.8rem;
+  overflow-y: auto;
+  max-height: calc(88vh - 3rem);
+}
+
+.modal-body pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid #000;
+  padding: 0.5rem;
+}
+
+/* input/expected/actual, side by side instead of stacked -- see
+   _render_io_side_by_side in ui/app.py */
+.io-row {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0.4rem 0;
+}
+
+.io-col {
+  flex: 1 1 0;
+  min-width: 160px;
+  border: 1px solid #000;
+}
+
+.io-col-title {
+  border-bottom: 1px solid #000;
+  padding: 0.2rem 0.5rem;
+  font-weight: bold;
+}
+
+.io-col pre {
+  margin: 0;
+  border: none;
+  padding: 0.5rem;
+}
+
+/* --- form (question editor) --- */
+
+fieldset {
+  border: 1px solid #000;
+  margin: 0.5rem 0;
+}
+
+legend {
+  padding: 0 0.3rem;
+}
+
+.field {
+  margin: 0.4rem 0;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+.field input[type="text"],
+.field input[type="number"],
+.field textarea,
+.field select {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: inherit;
+  border: 1px solid #000;
+  padding: 0.25rem;
+  background: #fff;
+  color: #000;
+}
+
+.field textarea.code {
+  font-family: monospace;
+}
+
+.inline-fields {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.inline-fields .field {
+  flex: 1 1 140px;
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.15rem 0.8rem;
+}
+
+.checkbox-grid label,
+.radio-row label {
+  font-weight: normal;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.radio-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.test-case {
+  border: 1px solid #000;
+  padding: 0.5rem;
+  margin: 0.4rem 0;
+}
+
+.test-case-head {
+  display: flex;
+  justify-content: space-between;
+}
+
+table.csv-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+table.csv-table th,
+table.csv-table td {
+  border: 1px solid #000;
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+}
+
+.error-msg {
+  border: 1px solid #000;
+  padding: 0.4rem;
+  margin: 0.4rem 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.8rem;
+}
+
+/* --- dashboard modal (report + student/gold code side by side) --- */
+
+.dashboard-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.dashboard-report {
+  border: 1px solid #000;
+  padding: 0.5rem;
+  max-height: 32vh;
+  overflow-y: auto;
+}
+
+.dashboard-code-split {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.dashboard-code-pane {
+  flex: 1 1 50%;
+  min-width: 0;
+  border: 1px solid #000;
+}
+
+.dashboard-pane-title {
+  border-bottom: 1px solid #000;
+  padding: 0.3rem 0.5rem;
+  font-weight: bold;
+}
+
+.dashboard-pane-body {
+  padding: 0.5rem;
+  overflow: auto;
+  max-height: 45vh;
+}

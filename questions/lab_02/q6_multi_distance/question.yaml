@@ -1,0 +1,137 @@
+id: q6_multi_distance
+title: Multi-Distance Calculator
+description: |
+  Write a C program that reads two 3D points and repeatedly shows a 5-option menu (Euclidean, Manhattan, Chebyshev, Minkowski, Quit), computing the chosen distance via a separate function per metric until the user selects Quit. For Minkowski, also read an order p; if p < 1, print "INVALID ORDER" instead of computing it. All distances print with 4 decimal places.
+filename_patterns: [q6.c, q06.c, Q06.c, question6.c, Q6.c, multi_distance.c]
+marks:
+  open: 0
+  hidden: 10
+compile:
+  standard: c11
+  flags: [-Wall, -O2, -lm]
+limits:
+  time_seconds: 2
+  wall_seconds: 5
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: custom
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  symbol_groups: [[":", "="]]
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: penalty
+  require: ['function_call:printMenu', 'function_call:euclidean', 'function_call:manhattan',
+    'function_call:chebyshev', 'function_call:minkowski']
+  require_match: all
+  forbid: []
+  penalty: 1
+tests:
+  open:
+  - name: group1_all_metrics
+    in: |
+      1.0 2.0 3.0 4.0 6.0 8.0
+      1
+      2
+      3
+      5
+    out: |
+      Euclidean Distance : 7.0711
+      Manhattan Distance : 12.0000
+      Chebyshev Distance : 5.0000
+      Exiting. Goodbye!
+    weight: 0
+    ignore_typo: true
+  - name: euclidean_3_4_only
+    in: |
+      0.0 0.0 0.0 3.0 4.0 0.0
+      1
+      5
+    out: |
+      Euclidean Distance : 5.0000
+      Exiting. Goodbye!
+    weight: 0
+    ignore_typo: true
+  - name: minkowski_p3
+    in: |
+      1.0 2.0 3.0 4.0 6.0 8.0
+      4
+      3
+      5
+    out: |
+      Minkowski Distance (p=3.0) : 6.0000
+      Exiting. Goodbye!
+    weight: 0
+    ignore_typo: true
+  - name: same_point_zero_distance
+    in: |
+      1.0 1.0 1.0 1.0 1.0 1.0
+      1
+      5
+    out: |
+      Euclidean Distance : 0.0000
+      Exiting. Goodbye!
+    weight: 0
+    ignore_typo: true
+  hidden:
+  - name: manhattan_negative_coords
+    in: |
+      -1.0 -2.0 -3.0 1.0 2.0 3.0
+      2
+      5
+    out: |
+      Manhattan Distance : 12.0000
+      Exiting. Goodbye!
+    weight: 2
+    ignore_typo: true
+  - name: chebyshev_single_axis
+    in: |
+      0.0 0.0 0.0 5.0 0.0 0.0
+      3
+      5
+    out: |
+      Chebyshev Distance : 5.0000
+      Exiting. Goodbye!
+    weight: 2
+    ignore_typo: true
+  - name: minkowski_invalid_order
+    in: |
+      1.0 2.0 3.0 4.0 6.0 8.0
+      4
+      0.5
+      5
+    out: |
+      INVALID ORDER
+      Exiting. Goodbye!
+    weight: 2
+    ignore_typo: true
+  - name: group8_all_metrics
+    in: |
+      2.0 3.0 4.0 5.0 7.0 8.0
+      1
+      2
+      3
+      5
+    out: |
+      Euclidean Distance : 6.4031
+      Manhattan Distance : 11.0000
+      Chebyshev Distance : 4.0000
+      Exiting. Goodbye!
+    weight: 2
+    partial: true
+    ignore_typo: true
+  - name: minkowski_p1_equals_manhattan
+    in: |
+      1.0 2.0 3.0 4.0 6.0 8.0
+      4
+      1
+      5
+    out: |
+      Minkowski Distance (p=1.0) : 12.0000
+      Exiting. Goodbye!
+    weight: 2
+    ignore_typo: true

@@ -1,0 +1,84 @@
+id: q3_prime_factorization
+title: Prime Factorization
+description: |
+  Write a C program that reads an integer n and prints its prime factorization, one "p^e" line per distinct prime factor in increasing order of the prime, using a for loop over candidate divisors and a while loop to remove all copies of a found factor. If n <= 0, print "INVALID INPUT". If n == 1, print "1 has no prime factors".
+filename_patterns: [q3.c, q03.c, Q03.c, question3.c, Q3.c, prime_factorization.c]
+marks:
+  open: 0
+  hidden: 10
+compile:
+  standard: c11
+  flags: [-Wall, -O2, -lm]
+limits:
+  time_seconds: 2
+  wall_seconds: 5
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: penalty
+  require: [for_loop, while_loop]
+  require_match: all
+  forbid: []
+  penalty: 5
+tests:
+  open:
+  - name: factor_360
+    in: '360'
+    out: |
+      2^3
+      3^2
+      5^1
+    weight: 0
+  - name: prime_17
+    in: '17'
+    out: |
+      17^1
+    weight: 0
+  - name: n_equals_1
+    in: '1'
+    out: |
+      1 has no prime factors
+    weight: 0
+  - name: invalid_negative
+    in: '-5'
+    out: |
+      INVALID INPUT
+    weight: 0
+  hidden:
+  - name: smallest_prime
+    in: '2'
+    out: |
+      2^1
+    weight: 2
+  - name: prime_97
+    in: '97'
+    out: |
+      97^1
+    weight: 2
+  - name: factor_1000000
+    in: '1000000'
+    out: |
+      2^6
+      5^6
+    weight: 2
+  - name: invalid_zero
+    in: '0'
+    out: |
+      INVALID INPUT
+    weight: 2
+    ignore_typo: true
+  - name: factor_100
+    in: '100'
+    out: |
+      2^2
+      5^2
+    weight: 2

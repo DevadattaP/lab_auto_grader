@@ -1,0 +1,75 @@
+id: q5_pyramid
+title: Inverted Full Pyramid of Asterisks
+description: |
+  Write a C program that reads a height N and prints an inverted full pyramid of asterisks, N rows tall, each row centered with leading spaces as needed (row i has i-1 leading spaces and 2*(N-i)+1 asterisks), using only for loops. If N <= 0, print "INVALID INPUT".
+filename_patterns: [q5.c, q05.c, Q05.c, question5.c, Q5.c, pyramid.c]
+marks:
+  open: 0
+  hidden: 10
+compile:
+  standard: c11
+  flags: [-Wall, -O2]
+limits:
+  time_seconds: 2
+  wall_seconds: 5
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: penalty
+  require: [for_loop]
+  require_match: any
+  forbid: [do_while, while_loop]
+  penalty: 5
+tests:
+  open:
+  - name: height_4
+    in: '4'
+    out: |
+      *******
+       *****
+        ***
+         *
+    weight: 0
+  - name: height_1
+    in: '1'
+    out: |
+      *
+    weight: 0
+  hidden:
+  - name: height_3
+    in: '3'
+    out: |
+      *****
+       ***
+        *
+    weight: 2
+  - name: invalid_zero
+    in: '0'
+    out: |
+      INVALID INPUT
+    weight: 2
+  - name: invalid_negative
+    in: '-2'
+    out: |
+      INVALID INPUT
+    weight: 2
+  - name: height_2
+    in: '2'
+    out: |
+      ***
+       *
+    weight: 2
+  - name: height_5
+    in: '5'
+    out: |
+      *********
+       *******
+        *****
+         ***
+          *
+    weight: 2

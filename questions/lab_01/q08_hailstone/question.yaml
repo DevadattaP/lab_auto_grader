@@ -1,0 +1,68 @@
+id: q08_hailstone
+title: Hailstone Sequence (Collatz Conjecture)
+description: |
+  Write a C program that reads a starting integer n and, using a while loop, generates and prints the Hailstone/Collatz sequence from n down to 1 (even terms halved, odd terms become 3n+1) on one line, then prints "Steps = X" with the number of steps taken (the starting number doesn't count). If n <= 0, print "INVALID INPUT" instead.
+filename_patterns: [q8.c, question8.c, Q8.c, hailstone.c, Q08.c, Question08.c, q08.c]
+marks:
+  open: 0
+  hidden: 6
+compile:
+  standard: c11
+  flags: [-Wall, -O2]
+limits:
+  time_seconds: 1
+  wall_seconds: 1
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: gate
+  require: [while_loop]
+  require_match: any
+  forbid: [do_while, for_loop]
+tests:
+  open:
+  - name: sequence_6
+    in: '6'
+    out: |
+      6 3 10 5 16 8 4 2 1
+      Steps = 8
+    weight: 0
+  - name: sequence_1
+    in: '1'
+    out: |
+      1
+      Steps = 0
+    weight: 0
+  - name: invalid_negative
+    in: '-5'
+    out: |
+      INVALID INPUT
+    weight: 0
+  hidden:
+  - name: sequence_7
+    in: '7'
+    out: |
+      7 22 11 34 17 52 26 13 40 20 10 5 16 8 4 2 1
+      Steps = 16
+    weight: 2
+  - name: invalid_zero
+    in: '0'
+    out: |
+      INVALID INPUT
+    weight: 2
+    ignore_typo: true
+  - name: sequence_9
+    in: '9'
+    out: |
+      9 28 14 7 22 11 34 17 52 26 13 40 20 10 5 16 8 4 2 1
+      Steps = 19
+    weight: 2

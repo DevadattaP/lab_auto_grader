@@ -1,0 +1,105 @@
+id: q04_calculator
+title: Simple Calculator using switch-case
+description: |
+  Write a C program that reads two integers and an operator character (+, -, *, /, %) and performs the corresponding arithmetic operation using a switch statement. For '/' and '%', if the second number is 0, print "MATH ERROR". For any other operator, print "INVALID OPERATOR". Division results are printed as a float with 2 decimal places; all other results as integers.
+filename_patterns: [q4.c, question4.c, Q4.c, calculator.c, Q04.c, Question04.c, q04.c]
+marks:
+  open: 0
+  hidden: 10
+compile:
+  standard: c11
+  flags: [-Wall, -O2]
+limits:
+  time_seconds: 1
+  wall_seconds: 1
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: gate
+  require: [case, switch]
+  require_match: all
+  forbid: []
+tests:
+  open:
+  - name: addition
+    in: |
+      10
+      3
+      +
+    out: '13'
+    weight: 0
+  - name: division
+    in: |
+      10
+      3
+      /
+    out: '3.33'
+    weight: 0
+  - name: modulo_by_zero
+    in: |
+      10
+      0
+      %
+    out: MATH ERROR
+    weight: 0
+  - name: invalid_operator
+    in: |
+      10
+      3
+      ~
+    out: INVALID OPERATOR
+    weight: 0
+  - name: subtraction
+    in: |
+      5
+      3
+      -
+    out: '2'
+    weight: 0
+  hidden:
+  - name: multiplication
+    in: |
+      5
+      3
+      *
+    out: '15'
+    weight: 2
+  - name: division_by_zero
+    in: |
+      5
+      0
+      /
+    out: MATH ERROR
+    weight: 2
+    ignore_typo: true
+  - name: negative_modulo
+    in: |
+      -9
+      3
+      %
+    out: '0'
+    weight: 2
+  - name: division_rounding
+    in: |
+      7
+      2
+      /
+    out: '3.50'
+    weight: 2
+  - name: invalid_operator_bang
+    in: |
+      10
+      100
+      !
+    out: INVALID OPERATOR
+    weight: 2
+    ignore_typo: true

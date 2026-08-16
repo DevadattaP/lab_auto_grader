@@ -1,0 +1,106 @@
+id: q02_quadratic_roots
+title: Roots of a Quadratic Equation
+description: |
+  Write a C program that reads three coefficients a, b, c (one per line) of a quadratic equation and prints the nature of its roots based on the discriminant (b^2 - 4ac). If a is 0, print "NOT A QUADRATIC EQUATION". If the discriminant is > 0, print "Real and Different Roots" and both roots to 2 decimal places. If it is 0, print "Real and Equal Roots" and the single root to 2 decimal places. If it is negative, print "Imaginary Roots" (no root values).
+filename_patterns: [q2.c, question2.c, Q2.c, quadratic.c, Q02.c, Question02.c, q02.c]
+marks:
+  open: 0
+  hidden: 8
+compile:
+  standard: c11
+  flags: [-Wall, -O2, -lm]
+limits:
+  time_seconds: 1
+  wall_seconds: 1
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+adjust_char_input: true
+adjust_scanf_address: true
+tests:
+  open:
+  - name: real_different_roots
+    in: |
+      1
+      -5
+      6
+    out: |
+      Real and Different Roots
+      root1 = 3.00
+      root2 = 2.00
+    weight: 0
+    partial: true
+  - name: real_equal_roots
+    in: |
+      1
+      -4
+      4
+    out: |
+      Real and Equal Roots
+      root1 = root2 = 2.00
+    weight: 0
+    partial: true
+  - name: imaginary_roots
+    in: |
+      1
+      2
+      5
+    out: |
+      Imaginary Roots
+    weight: 0
+  - name: not_a_quadratic
+    in: |
+      0
+      2
+      -4
+    out: |
+      NOT A QUADRATIC EQUATION
+    weight: 0
+  hidden:
+  - name: real_equal_negative_root
+    in: |
+      2
+      4
+      2
+    out: |
+      Real and Equal Roots
+      root1 = root2 = -1.00
+    weight: 2
+    partial: true
+    ignore_typo: true
+  - name: real_different_negative_root
+    in: |
+      1
+      0
+      -4
+    out: |
+      Real and Different Roots
+      root1 = 2.00
+      root2 = -2.00
+    weight: 2
+    partial: true
+    ignore_typo: true
+  - name: imaginary_roots_all_ones
+    in: |
+      1
+      1
+      1
+    out: |
+      Imaginary Roots
+    weight: 2
+    ignore_typo: true
+  - name: not_a_quadratic_all_zero
+    in: |
+      0
+      0
+      0
+    out: |
+      NOT A QUADRATIC EQUATION
+    weight: 2
+    ignore_typo: true

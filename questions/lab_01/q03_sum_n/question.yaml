@@ -1,0 +1,57 @@
+id: q03_sum_n
+title: Sum of First N Natural Numbers
+description: |
+  Write a C program that reads an integer N and computes the sum of the first N natural numbers (1 + 2 + ... + N) using a while loop, printing "Sum = <value>". If N is not positive, the sum is 0.
+filename_patterns: [q3.c, question3.c, Q3.c, sum_n.c, Q03.c, Question03.c, q03.c]
+marks:
+  open: 0
+  hidden: 6
+compile:
+  standard: c11
+  flags: [-Wall, -O2]
+limits:
+  time_seconds: 1
+  wall_seconds: 1
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: gate
+  require: [while_loop]
+  require_match: any
+  forbid: []
+tests:
+  open:
+  - name: sum_5
+    in: '5'
+    out: Sum = 15
+    weight: 0
+  - name: sum_10
+    in: '10'
+    out: Sum = 55
+    weight: 0
+  - name: negative_n
+    in: '-5'
+    out: Sum = 0
+    weight: 0
+  hidden:
+  - name: sum_1
+    in: '1'
+    out: Sum = 1
+    weight: 2
+  - name: sum_0
+    in: '0'
+    out: Sum = 0
+    weight: 2
+  - name: sum_100
+    in: '100'
+    out: Sum = 5050
+    weight: 2

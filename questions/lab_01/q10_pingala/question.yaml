@@ -1,0 +1,59 @@
+id: q10_pingala
+title: Pingala Sequence (First N Terms)
+description: |
+  Write a C program that reads an integer N and prints the first N terms of the Pingala sequence (0, 1, 1, 2, 3, 5, 8, 13, ...), where each term from the third onward is the sum of the two preceding terms, using a single for loop (no arrays, nested loops, or while/do-while). Print the terms on one line separated by a single space. If N <= 0, print "INVALID INPUT".
+filename_patterns: [q10.c, question10.c, Q10.c, pingala.c]
+marks:
+  open: 0
+  hidden: 6
+compile:
+  standard: c11
+  flags: [-Wall, -O2]
+limits:
+  time_seconds: 1
+  wall_seconds: 1
+  memory_mb: 128
+  output_bytes: 65536
+  max_processes: 1
+matcher:
+  type: exact_trim
+  ignore_case: true
+  ignore_whitespace: true
+  ignore_punctuation: true
+  allow_extra_output: true
+adjust_char_input: true
+adjust_scanf_address: true
+code_checks:
+  mode: gate
+  require: [for_loop]
+  require_match: any
+  forbid: [do_while, while_loop]
+tests:
+  open:
+  - name: n_1
+    in: '1'
+    out: '0'
+    weight: 0
+  - name: n_2
+    in: '2'
+    out: 0 1
+    weight: 0
+  - name: n_5
+    in: '5'
+    out: 0 1 1 2 3
+    weight: 0
+  hidden:
+  - name: invalid_zero
+    in: '0'
+    out: INVALID INPUT
+    weight: 2
+    ignore_typo: true
+  - name: invalid_negative
+    in: '-3'
+    out: INVALID INPUT
+    weight: 2
+    ignore_typo: true
+  - name: n_20
+    in: '20'
+    out: 0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181
+    weight: 2

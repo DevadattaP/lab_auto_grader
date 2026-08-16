@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto-grader</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div id="tree-root">Loading...</div>
+
+<dialog id="code-modal">
+  <div class="modal-head">
+    <strong id="code-modal-title"></strong>
+    <button type="button" data-close>Close</button>
+  </div>
+  <div id="code-modal-body" class="modal-body"></div>
+</dialog>
+
+<dialog id="result-modal">
+  <div class="modal-head">
+    <strong id="result-modal-title"></strong>
+    <button type="button" data-close>Close</button>
+  </div>
+  <div id="result-modal-body" class="modal-body"></div>
+</dialog>
+
+<dialog id="question-modal">
+  <div class="modal-head">
+    <strong id="question-modal-title"></strong>
+    <button type="button" data-close>Close</button>
+  </div>
+  <div id="question-modal-body" class="modal-body"></div>
+</dialog>
+
+<dialog id="dashboard-modal" class="wide">
+  <div class="modal-head">
+    <strong id="dashboard-modal-title"></strong>
+    <button type="button" data-close>Close</button>
+  </div>
+  <div class="modal-body dashboard-modal-body">
+    <div id="dashboard-report" class="dashboard-report"></div>
+    <div class="dashboard-code-split">
+      <div class="dashboard-code-pane">
+        <div class="dashboard-pane-title">Student submission</div>
+        <div id="dashboard-student-code" class="dashboard-pane-body"></div>
+      </div>
+      <div class="dashboard-code-pane">
+        <div class="dashboard-pane-title">Gold solution</div>
+        <div id="dashboard-gold-code" class="dashboard-pane-body"></div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
