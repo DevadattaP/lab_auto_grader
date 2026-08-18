@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-VALID_CONSTRUCT_PREFIXES = ("function_call:", "regex:")
+VALID_CONSTRUCT_PREFIXES = ("function_call:", "regex:", "rec_function_call:")
 
 
 class CodeCheckConfigError(Exception):
@@ -140,7 +140,7 @@ _BUILTIN_REGEXES: dict[str, re.Pattern] = {
 # the public list consumers outside this module (e.g. the UI's checkbox set)
 # should use, rather than reaching into _BUILTIN_REGEXES directly.
 KNOWN_BUILTIN_CONSTRUCTS = sorted(
-    set(_BUILTIN_REGEXES) | {"if_else", "bitwise_and", "bitwise_or", "function_def_used"}
+    set(_BUILTIN_REGEXES) | {"if_else", "bitwise_and", "bitwise_or", "function_def_used", "rec_function_def_used"}
 )
 
 # C keywords that share `keyword (...) {`'s shape with a real function
@@ -247,6 +247,52 @@ def _reachable_from_main(cleaned: str, defs: dict[str, tuple[int, int, int]]) ->
     return visited
 
 
+def _is_recursive_call(cleaned: str, func_name: str, body_start: int, body_end: int) -> bool:
+    """Check if a function calls itself (directly recursive). Returns True if
+    `func_name` appears as a call within its own body span."""
+    call_re = re.compile(rf"\b{re.escape(func_name)}\s*\(((?:[^()]|\([^()]*\))*)\)\s*([;{{]?)")
+    for m in call_re.finditer(cleaned, body_start, body_end):
+        if m.group(2) == "{":
+            continue  # a nested/other definition, not a call
+        if _PARAM_TYPE_LEAD.match(m.group(1)):
+            continue  # looks like a declaration's parameter-type list, not call args
+        return True
+    return False
+
+
+def _find_recursive_functions(cleaned: str) -> list[int]:
+    """Line numbers of the *definition* of each function that calls itself
+    (directly recursive) AND is reachable from `main` through a chain of real
+    calls, similar to `function_def_used`. A recursive function that's never
+    invoked from main is correctly excluded, since it's not actually used."""
+    defs = _find_all_function_defs(cleaned)
+    reachable = _reachable_from_main(cleaned, defs)
+    found = []
+    for name, (line, body_start, body_end) in defs.items():
+        if name != "main" and name in reachable and _is_recursive_call(cleaned, name, body_start, body_end):
+            found.append(line)
+    return sorted(found)
+
+
+def _find_recursive_function_by_name(cleaned: str, target_name: str) -> list[int]:
+    """Line numbers of calls to `target_name` within the definition of
+    `target_name` itself (i.e., recursive calls to the named function).
+    Returns empty list if the function doesn't exist or doesn't call itself."""
+    defs = _find_all_function_defs(cleaned)
+    if target_name not in defs:
+        return []
+    line, body_start, body_end = defs[target_name]
+    call_re = re.compile(rf"\b{re.escape(target_name)}\s*\(((?:[^()]|\([^()]*\))*)\)\s*([;{{]?)")
+    lines = []
+    for m in call_re.finditer(cleaned, body_start, body_end):
+        if m.group(2) == "{":
+            continue  # a nested/other definition, not a call
+        if _PARAM_TYPE_LEAD.match(m.group(1)):
+            continue  # looks like a declaration's parameter-type list, not call args
+        lines.append(_line_of(cleaned, m.start()))
+    return sorted(lines)
+
+
 def _find_function_def_used(cleaned: str) -> list[int]:
     """Line numbers of the *definition* of each student-defined function
     (any name, excluding `main` and C keywords) that is reachable from
@@ -290,6 +336,8 @@ def _detect(cleaned: str, name: str) -> list[int]:
         return _find_binary_op(cleaned, "|", exclude_doubled=True)
     if name == "function_def_used":
         return _find_function_def_used(cleaned)
+    if name == "rec_function_def_used":
+        return _find_recursive_functions(cleaned)
     if name in _BUILTIN_REGEXES:
         return _regex_lines(cleaned, _BUILTIN_REGEXES[name])
     if name.startswith("function_call:"):
@@ -302,6 +350,9 @@ def _detect(cleaned: str, name: str) -> list[int]:
         # (code_checks_ast.py), which only ever sees a real CALL_EXPR here.
         call_re = re.compile(rf"\b{fn}\s*\(((?:[^()]|\([^()]*\))*)\)\s*([;{{]?)")
         return [_line_of(cleaned, m.start()) for m in call_re.finditer(cleaned) if m.group(2) != "{"]
+    if name.startswith("rec_function_call:"):
+        fn = name.split(":", 1)[1]
+        return _find_recursive_function_by_name(cleaned, fn)
     if name.startswith("regex:"):
         pattern = name.split(":", 1)[1]
         return _regex_lines(cleaned, re.compile(pattern))
@@ -323,7 +374,7 @@ def validate_construct_name(name: str) -> None:
         return
     raise CodeCheckConfigError(
         f"unknown construct '{name}'. Known built-ins: {KNOWN_BUILTIN_CONSTRUCTS}, "
-        f"or use 'function_call:<name>' / 'regex:<pattern>'"
+        f"or use 'function_call:<name>' / 'rec_function_call:<name>' / 'regex:<pattern>'"
     )
 
 

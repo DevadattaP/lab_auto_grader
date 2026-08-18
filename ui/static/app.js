@@ -820,12 +820,12 @@ function buildQuestionForm(labId, qid, payload, isNew) {
     payload.code_checks_require_builtin
   );
   const requireExtra = textInput(payload.code_checks_require_extra, {
-    placeholder: "e.g. function_call:foo, regex:\\bbar\\b",
+    placeholder: "e.g. function_call:foo, rec_function_call:bar, regex:\\bbar\\b",
   });
   const requireMatchRow = radioRow("code_checks_require_match", ["any", "all"], payload.code_checks_require_match);
   const forbidGrid = checkboxGrid("forbid-builtin", META.builtin_constructs, payload.code_checks_forbid_builtin);
   const forbidExtra = textInput(payload.code_checks_forbid_extra, {
-    placeholder: "e.g. function_call:toupper, function_call:tolower",
+    placeholder: "e.g. function_call:toupper, rec_function_call:factorial",
   });
 
   ccFieldsWrap.append(

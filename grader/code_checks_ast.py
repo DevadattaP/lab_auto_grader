@@ -175,6 +175,70 @@ def _operator_spelling(cur, cindex) -> str | None:
     return "".join(op_toks) if op_toks else None
 
 
+def _recursive_functions(ctx: AstContext) -> list[int]:
+    """AST equivalent of code_checks._find_recursive_functions: returns
+    definitions of functions that call themselves (directly recursive) AND are
+    reachable from main. A recursive function that's never invoked from main
+    is excluded, since it's not actually used."""
+    cindex = ctx.cindex
+    defs = ctx.function_defs
+    call_kind = cindex.CursorKind.CALL_EXPR
+    lines = []
+
+    # First, compute reachability from main using the same BFS as _function_def_used
+    if "main" not in defs:
+        return []
+    visited = {"main"}
+    frontier = [defs["main"]]
+    while frontier:
+        cur = frontier.pop()
+        for callee in cur.walk_preorder():
+            if callee.kind != call_kind:
+                continue
+            name = callee.spelling
+            if name in defs and name not in visited:
+                visited.add(name)
+                frontier.append(defs[name])
+
+    # Now check which reachable functions are recursive
+    for func_name, func_cursor in defs.items():
+        if func_name == "main" or func_name not in visited:
+            continue
+        calls_itself = False
+        for callee in func_cursor.walk_preorder():
+            if callee.kind != call_kind:
+                continue
+            if callee.spelling == func_name:
+                calls_itself = True
+                break
+        if calls_itself:
+            lines.append(func_cursor.location.line)
+
+    return sorted(lines)
+
+
+def _recursive_function_calls(ctx: AstContext, target_name: str) -> list[int]:
+    """Returns line numbers of all calls to `target_name` from within the
+    definition of `target_name` itself (i.e., recursive calls)."""
+    cindex = ctx.cindex
+    defs = ctx.function_defs
+
+    if target_name not in defs:
+        return []
+
+    func_cursor = defs[target_name]
+    call_kind = cindex.CursorKind.CALL_EXPR
+    lines = []
+
+    for callee in func_cursor.walk_preorder():
+        if callee.kind != call_kind:
+            continue
+        if callee.spelling == target_name:
+            lines.append(callee.location.line)
+
+    return sorted(lines)
+
+
 def _function_def_used(ctx: AstContext) -> list[int]:
     """AST equivalent of code_checks._find_function_def_used: BFS from
     `main` over the real call graph (a CALL_EXPR's spelling, resolved
@@ -250,10 +314,17 @@ def detect(ctx: AstContext, name: str) -> list[int]:
     if name == "function_def_used":
         return _function_def_used(ctx)
 
+    if name == "rec_function_def_used":
+        return _recursive_functions(ctx)
+
     if name.startswith("function_call:"):
         fn_name = name.split(":", 1)[1]
         return sorted(
             c.location.line for c in ctx.by_kind.get(cindex.CursorKind.CALL_EXPR, []) if c.spelling == fn_name
         )
+
+    if name.startswith("rec_function_call:"):
+        fn_name = name.split(":", 1)[1]
+        return _recursive_function_calls(ctx, fn_name)
 
     raise AstUnavailable(f"no AST-based check implemented for construct '{name}'")
