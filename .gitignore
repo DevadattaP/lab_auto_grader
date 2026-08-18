@@ -4,3 +4,4 @@ submissions
 *.csv
 .env
 live/
+venv

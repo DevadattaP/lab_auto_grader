@@ -32,15 +32,39 @@ There's one lab per subfolder under each of `questions/`, `submissions/`, `runs/
 
 ## One-time setup
 
-### Python environment
+### Automated setup: for linux users only (recommended)
+
+Run the interactive installation script — it handles all setup, checks, and configuration:
 
 ```bash
-python3 -m venv ~/venv           # skip if you already have a venv for this
-source ~/venv/bin/activate
-pip install -r requirements.txt  # installs PyYAML
+chmod +x install.sh
+./install.sh
 ```
 
-### Installing `isolate`
+The script will:
+- Check OS and cgroup v2 support (required for `isolate`)
+- Install system dependencies (build tools, Python)
+- Build and install `isolate` sandbox from source
+- Create Python virtual environment in project folder
+- Install Python dependencies
+- Create necessary directories (`questions/`, `submissions/`, `runs/`, `live/`)
+- Initialize admin account (interactive prompt)
+
+After completion, follow the printed next-steps guide.
+
+### Manual setup (if needed)
+
+If you prefer to install manually, or the script doesn't work on your OS:
+
+#### Python environment
+
+```bash
+python3 -m venv venv             # create venv in project directory
+source venv/bin/activate
+pip install -r requirements.txt  # installs PyYAML, Flask, dependencies
+```
+
+#### Installing `isolate`
 
 `isolate` (`github.com/ioi/isolate`) is the sandbox the grader runs student code in — see [AUTOGRADER_DESIGN.md §5.2](AUTOGRADER_DESIGN.md) for why it was chosen and the full threat model. It isn't packaged for Ubuntu 24.04, so it's built from source. This is a one-time, root-level setup on the grading machine.
 
