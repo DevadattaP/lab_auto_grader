@@ -13,6 +13,8 @@
   const finalizeOutputEl = document.getElementById("finalize-output");
 
   let currentStatus = "not_started";
+  let timeRemainingSeconds = 0;
+  let lastServerUpdateTime = 0;
 
   async function api(path, opts) {
     const res = await fetch(path, opts);
@@ -57,6 +59,11 @@
     const { ok, data } = await api(`/api/live/${labId}/session/status`);
     if (!ok) return;
     currentStatus = data.status;
+
+    if (data.status === "running") {
+      timeRemainingSeconds = data.time_remaining_seconds;
+      lastServerUpdateTime = Date.now();
+    }
 
     statusPillEl.textContent = data.status.replace("_", " ");
     statusPillEl.className = `status-pill status-${data.status}`;
@@ -146,7 +153,7 @@
     const tbody = document.querySelector("#accounts-table tbody");
     tbody.innerHTML = "";
     if (!ok || !data.accounts.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="hint">No students have signed in for this lab yet.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="hint">No students have signed in for this lab yet.</td></tr>`;
       return;
     }
     for (const a of data.accounts) {
@@ -164,18 +171,24 @@
       const passwordStatus = a.password_set
         ? `<span class="device-yes">custom</span>`
         : `<span class="device-offline">default (not changed yet)</span>`;
+      const lockStatus = a.locked
+        ? `<span style="color: #d9534f; font-weight: bold;">🔒 Locked</span>`
+        : `<span style="color: #5cb85c;">🔓 Unlocked</span>`;
       tr.innerHTML = `
         <td>${a.roll_no}</td>
         <td>${a.name || "-"}</td>
         <td>${passwordStatus}</td>
         <td>${device}</td>
         <td>${a.last_seen || "-"}</td>
+        <td>${lockStatus}</td>
         <td>
           <button type="button" data-action="reset">Reset password</button>
           <button type="button" data-action="unbind" ${a.active ? "" : "disabled"}>Sign out device</button>
+          <button type="button" data-action="lock-toggle">${a.locked ? "Unlock" : "Lock"}</button>
         </td>`;
       tr.querySelector('[data-action="reset"]').addEventListener("click", () => resetAccount(a.roll_no));
       tr.querySelector('[data-action="unbind"]').addEventListener("click", () => unbindAccount(a.roll_no));
+      tr.querySelector('[data-action="lock-toggle"]').addEventListener("click", () => toggleLockAccount(a.roll_no, a.locked));
       tbody.appendChild(tr);
     }
   }
@@ -206,6 +219,22 @@
     if (!confirm(`Unbind ${roll_no}'s device? Their current session will be signed out and they can log in from a new device.`)) return;
     const { ok, data } = await api(`/api/live/${labId}/accounts/${encodeURIComponent(roll_no)}/unbind`, { method: "POST" });
     if (!ok) alert(data.error || "Failed to unbind device.");
+    await loadAccounts();
+  }
+
+  async function toggleLockAccount(roll_no, isCurrentlyLocked) {
+    const action = isCurrentlyLocked ? "unlock" : "lock";
+    const msg = isCurrentlyLocked
+      ? `Unlock ${roll_no}? They will be able to save and run code again.`
+      : `Lock ${roll_no}? They will not be able to save or run code. They can still view questions and results.`;
+    if (!confirm(msg)) return;
+    const endpoint = isCurrentlyLocked ? "unlock" : "lock";
+    const { ok, data } = await api(`/api/live/${labId}/accounts/${encodeURIComponent(roll_no)}/${endpoint}`, { method: "POST" });
+    if (ok) {
+      alert(`${roll_no} has been ${action}ed.`);
+    } else {
+      alert(data.error || `Failed to ${action} account.`);
+    }
     await loadAccounts();
   }
 
@@ -323,12 +352,23 @@
     window.location.href = "/admin/login";
   });
 
+  /* ------------------------------------------------------------ local ticker */
+
+  function tickTimer() {
+    if (currentStatus !== "running" || !lastServerUpdateTime) return;
+    const elapsedMs = Date.now() - lastServerUpdateTime;
+    const elapsedSecs = elapsedMs / 1000;
+    const localTimeRemaining = Math.max(0, timeRemainingSeconds - elapsedSecs);
+    headerTimerEl.textContent = fmtTime(localTimeRemaining);
+  }
+
   /* --------------------------------------------------------------- init */
 
   async function init() {
     await loadSessionStatus();
     await loadDisplayConfig();
     setInterval(loadSessionStatus, 5000);
+    setInterval(tickTimer, 1000);
     setInterval(() => {
       if (!document.getElementById("tab-live").hidden) loadLiveStatus();
     }, 10000);

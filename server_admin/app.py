@@ -135,6 +135,7 @@ def api_list_accounts(lab_id: str):
                 "bound_at": a.bound_at,
                 "last_seen": a.last_seen,
                 "password_set": bool(global_account and global_account.password_set),
+                "locked": a.locked,
             }
         )
     return jsonify({"accounts": out})
@@ -162,6 +163,24 @@ def api_reset_account(lab_id: str, roll: str):
 def api_unbind_account(lab_id: str, roll: str):
     try:
         accounts.unbind_student_device(_students_csv(lab_id), roll)
+    except accounts.AccountError as e:
+        return jsonify({"error": str(e)}), 404
+    return jsonify({"ok": True})
+
+
+@app.post("/api/live/<lab_id>/accounts/<roll>/lock")
+def api_lock_account(lab_id: str, roll: str):
+    try:
+        accounts.lock_student(_students_csv(lab_id), roll)
+    except accounts.AccountError as e:
+        return jsonify({"error": str(e)}), 404
+    return jsonify({"ok": True})
+
+
+@app.post("/api/live/<lab_id>/accounts/<roll>/unlock")
+def api_unlock_account(lab_id: str, roll: str):
+    try:
+        accounts.unlock_student(_students_csv(lab_id), roll)
     except accounts.AccountError as e:
         return jsonify({"error": str(e)}), 404
     return jsonify({"ok": True})

@@ -49,6 +49,10 @@
   let sessionStatus = "not_started";
   let timeRemainingSeconds = 0;
   let resyncing = false;
+  let fiveMinuteWarningShown = false;
+  let studentLocked = false;
+  let studentLockAlertShown = false;
+  let studentUnlockAlertShown = false;
 
   // Server-side toggles (see /api/config) for what stays visible once the
   // session is finalized -- workspace browsing, report, and leaderboard
@@ -84,6 +88,7 @@
     matchBrackets: true,
     theme: "default",
   });
+  setTimeout(() => cm.refresh(), 100);
   cm.on("change", (instance, changeObj) => {
     // cm.setValue() (used when switching questions) fires a change event
     // too, with origin "setValue" -- must not count as a real edit, or
@@ -116,6 +121,10 @@
     if (sessionStatus !== "running") return;
     timeRemainingSeconds = Math.max(0, timeRemainingSeconds - 1);
     timerEl.textContent = fmtTime(timeRemainingSeconds);
+    if (timeRemainingSeconds <= 300 && timeRemainingSeconds > 299 && !fiveMinuteWarningShown) {
+      fiveMinuteWarningShown = true;
+      alert("⏰ Session ending in 5 minutes!\n\nYou will not be able to submit any code once the timer reaches 00:00.\n\nPlease:\n• Finish your work as soon as possible\n• Run your code to save the results\n• Save any unsaved changes\n\nMake sure everything is submitted before time runs out!");
+    }
     if (timeRemainingSeconds <= 0 && !resyncing) {
       resyncing = true;
       pollStatus().finally(() => {
@@ -125,9 +134,29 @@
   }
   setInterval(tickTimer, 1000);
 
+  function updateCodeEditorLockStatus() {
+    if (studentLocked) {
+      runBtn.disabled = true;
+      cm.setOption("readOnly", "nocursor");
+      saveStatusEl.textContent = "Account locked - cannot submit";
+    } else if (!writeAllowed) {
+      runBtn.disabled = true;
+      cm.setOption("readOnly", "nocursor");
+      renderSaveStatus();
+    } else {
+      runBtn.disabled = false;
+      cm.setOption("readOnly", false);
+      renderSaveStatus();
+    }
+  }
+
   function renderSaveStatus() {
     if (!writeAllowed) {
       saveStatusEl.textContent = "Read-only (lab is not accepting submissions)";
+      return;
+    }
+    if (studentLocked) {
+      saveStatusEl.textContent = "Account locked - cannot submit";
       return;
     }
     const parts = [];
@@ -182,7 +211,7 @@
 
   async function doSave(qidOverride) {
     const qid = qidOverride || currentQid;
-    if (!qid || !writeAllowed || saving) return;
+    if (!qid || !writeAllowed || saving || studentLocked) return;
     saving = true;
     const source = cm.getValue();
     const { ok, data } = await api("/api/save", {
@@ -279,10 +308,10 @@
     cm.setValue(data.source || "");
     dirty = false;
     writeAllowed = data.write_allowed;
-    runBtn.disabled = !writeAllowed;
-    cm.setOption("readOnly", writeAllowed ? false : "nocursor");
+    updateCodeEditorLockStatus();
     renderSaveStatus();
     renderRunResult(currentRunResult, currentRunStale);
+    setTimeout(() => cm.refresh(), 50);
   }
 
   function renderTestResult(d) {
@@ -393,7 +422,7 @@
   }
 
   runBtn.addEventListener("click", async () => {
-    if (!currentQid || !writeAllowed) return;
+    if (!currentQid || !writeAllowed || studentLocked) return;
     runBtn.disabled = true;
     runBtn.textContent = "Running...";
     resultsPanelEl.innerHTML = `<div class="hint">Compiling and running against open tests...</div>`;
@@ -523,6 +552,17 @@
     if (!ok) return;
     sessionStatus = data.status;
 
+    const newLockedStatus = data.student_locked || false;
+    if (newLockedStatus && !studentLocked && !studentLockAlertShown) {
+      studentLockAlertShown = true;
+      alert("⛔ Your account has been locked by the instructor.\n\nYou can no longer save or run code. You can still view questions and results.\n\nPlease contact your instructor if you have questions.");
+    } else if (!newLockedStatus && studentLocked && !studentUnlockAlertShown) {
+      studentUnlockAlertShown = true;
+      alert("✅ Your account has been unlocked.\n\nYou can now save and run code again.");
+    }
+    studentLocked = newLockedStatus;
+    updateCodeEditorLockStatus();
+
     if (data.status === "not_started") {
       showView("waiting");
       postSessionNavEl.hidden = true;
@@ -553,7 +593,7 @@
       return;
     }
     if (data.status === "finalized") {
-      timerEl.textContent = "done";
+      timerEl.textContent = "Over";
       await loadConfig();
       showBanner(null);
 

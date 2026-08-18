@@ -145,6 +145,12 @@ def _workspace_gate_error(state) -> str | None:
     return None
 
 
+def _get_student_locked_status(roll_no: str) -> bool:
+    """Returns whether this student account is currently locked."""
+    account = accounts.get_account(STUDENTS_CSV, roll_no)
+    return account is not None and account.locked
+
+
 def _source_path(roll_no: str, question) -> Path:
     return SUBMISSIONS_DIR / roll_no / question.filename_patterns[0]
 
@@ -276,8 +282,9 @@ def api_config():
 
 @app.get("/api/session/status")
 def api_session_status():
-    _current_roll_no()
+    roll_no = _current_roll_no()
     state = live_session.auto_lock_if_expired(LIVE_DIR)
+    locked = _get_student_locked_status(roll_no)
     return jsonify(
         {
             "status": state.status,
@@ -285,6 +292,7 @@ def api_session_status():
             "end_time": state.end_time,
             "time_remaining_seconds": live_session.time_remaining_seconds(LIVE_DIR),
             "finalized_run": state.finalized_run,
+            "student_locked": locked,
         }
     )
 
@@ -393,6 +401,8 @@ def api_save():
     data = request.get_json(silent=True) or {}
     qid = _safe_qid(data.get("qid", ""))
     source = data.get("source", "")
+    if _get_student_locked_status(roll_no):
+        return jsonify({"error": "Your account has been locked. You cannot submit code."}), 423
     if not live_session.is_write_allowed(LIVE_DIR):
         return jsonify({"error": "The lab is not currently accepting submissions."}), 423
 
@@ -409,6 +419,8 @@ def api_run():
     data = request.get_json(silent=True) or {}
     qid = _safe_qid(data.get("qid", ""))
     source = data.get("source", "")
+    if _get_student_locked_status(roll_no):
+        return jsonify({"error": "Your account has been locked. You cannot run code."}), 423
     if not live_session.is_write_allowed(LIVE_DIR):
         return jsonify({"error": "The lab is not currently accepting submissions."}), 423
 

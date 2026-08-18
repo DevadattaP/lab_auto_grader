@@ -97,19 +97,21 @@ lab_auto_grader/
 ### 5.1 `students.csv` (`live/<lab_id>/students.csv`)
 
 ```csv
-roll_no,password_hash,ip,bound_at,last_seen
-112201023,pbkdf2:sha256:...,10.0.5.14,2026-08-16T09:58:03+05:30,2026-08-16T10:41:12+05:30
+roll_no,ip,active,bound_at,last_seen,locked
+112201023,10.0.5.14,1,2026-08-16T09:58:03+05:30,2026-08-16T10:41:12+05:30,
+112201024,10.0.5.15,1,2026-08-16T09:59:12+05:30,2026-08-16T10:42:03+05:30,1
 ```
 
-- `password_hash` via `werkzeug.security.generate_password_hash` (already a transitive Flask dependency — no new dependency needed for hashing itself).
 - `ip` empty until first successful login; then bound.
-- **Login flow** (`grader/accounts.py::authenticate`):
+- `active` signals whether there's currently a live (not-logged-out) session — this, not `ip` alone, enforces "one device at a time" (see step 5 below).
+- `locked` — admin-controlled per-student code submission lock. When `1` (true), the student cannot save, run, or autosave code for the rest of the session, though they can still view questions, browse results, and access the leaderboard. Enforced server-side on every `/api/save` and `/api/run` request.
+- **Login flow** (`grader/accounts.py::authenticate_student`):
   1. Look up `roll_no` (normalized like `discover.py` does: trim, uppercase, validated against `ROLL_NO_RE`).
-  2. `check_password_hash(row.password_hash, submitted_password)`.
-  3. If `row.ip` is empty → bind `request.remote_addr` into the CSV now (this is the login that claims the device), issue a signed session cookie.
-  4. If `row.ip` is set and `!= request.remote_addr` → reject: `"Already signed in from another device. Ask your instructor to reset your device."`
-  5. If `row.ip == request.remote_addr` → allow (re-login on the same machine, e.g. browser refresh/restart) — same device is always fine.
-- Every write to `students.csv` (bind IP on login, admin reset/unbind, admin bulk-generate) goes through a **cross-process** lock, since both `server_admin` and `server_student` are separate OS processes touching the same file: `filelock.FileLock(csv_path + ".lock")` around read-modify-write. This is the one new dependency needed for correctness (`threading.Lock` isn't enough across two processes).
+  2. Check password against `password_hash` (or default if first login: `default_password(roll_no)`).
+  3. If `row.active` is true and `row.ip != request.remote_addr` → reject: `"Already signed in from another device. Ask your instructor to reset your device."`
+  4. Otherwise, bind `request.remote_addr` and mark `active=1`, issue a signed session cookie.
+- Note: The `locked` field is **not** checked at login — a locked student can still log in, view questions, and browse results; they're just prevented from saving/running code via server-side checks on `/api/save` and `/api/run` (§9).
+- Every write to `students.csv` (bind IP on login, admin reset/unbind/lock/unlock, admin bulk-generate) goes through a **cross-process** lock, since both `server_admin` and `server_student` are separate OS processes touching the same file: `filelock.FileLock(csv_path + ".lock")` around read-modify-write. This is the one new dependency needed for correctness (`threading.Lock` isn't enough across two processes).
 
 ### 5.2 Admin credentials (`.env`, repo root, gitignored)
 
@@ -138,6 +140,8 @@ python -m grader.manage_accounts unbind --lab lab_01 --roll 112201023
 # reset the admin password in .env
 python -m grader.manage_accounts reset-admin
 ```
+
+Lock/unlock are exposed only through the admin web UI (§10 accounts tab) — no CLI equivalent, since they're intended for real-time mid-session instructor action (misbehaving/disruptive student).
 
 This satisfies the requirement verbatim ("a program on server which on run can be used to reset password") and is also what the admin web UI's reset/unbind buttons call internally — one implementation, two entry points (CLI + HTTP route), avoiding logic duplication.
 
@@ -240,15 +244,26 @@ class SandboxPool:
 | `/` | GET | if session not `running`: waiting/locked/finalized landing page; else question list |
 | `/api/questions` | GET | list of this lab's questions via student-safe projection (title, description, filename, open-test count — no marks breakdown of hidden tests, no gold path) |
 | `/api/questions/<qid>` | GET | full student view: description + this student's currently-saved source (if any) for the editor |
-| `/api/save` | POST | body `{qid, source}` → `is_write_allowed` check → write `.c` file only, no compile/run (autosave path) |
-| `/api/run` | POST | body `{qid, source}` → `is_write_allowed` check → `sandbox_pool.checkout()` → `student_view.run_open_tests` → JSON: compile result, per-open-test pass/fail + `pass_reasons` + input/expected/actual, code_checks feedback |
-| `/api/timer` | GET | polled every few seconds by the UI for the countdown display |
+| `/api/session/status` | GET | polled on heartbeat: returns session state, timer countdown, and `student_locked` flag (true if this account is admin-locked) |
+| `/api/save` | POST | body `{qid, source}` → check `student_locked` (reject 423 if true) → `is_write_allowed` check → write `.c` file only, no compile/run (autosave path) |
+| `/api/run` | POST | body `{qid, source}` → check `student_locked` (reject 423 if true) → `is_write_allowed` check → `sandbox_pool.checkout()` → `student_view.run_open_tests` → JSON: compile result, per-open-test pass/fail + `pass_reasons` + input/expected/actual, code_checks feedback |
 | `/api/results` | GET | only once `finalized`: this student's full report, rendered from `runs/<lab>/<finalized_run>/report_<roll>.md` via the existing markdown→HTML pattern from `ui/app.py` |
 | `/api/leaderboard` | GET | only once `finalized`: parsed `summary.csv`, sorted by total, roll numbers only (no names, matching the CSV's own schema — no PII beyond what's already in the roster) |
 
 **Editor page** (`templates/editor.html` + vendored JS, §13): left sidebar = question list with a live per-question status chip (not attempted / compiled+open-tests-passing count); main panel = question description, code editor, Run button, results panel below showing per-test outcomes in the same visual vocabulary as `report.py` already uses (`PASS`, `PASS (case not matched)`, `FAIL (WRONG_ANSWER)`, `FAIL (TIMEOUT: ...)`).
 
-**Autosave beyond the literal ask**: the user's design has the `.c` file overwritten only on Run-click. Recommend also autosaving on a debounced interval (~20s) and on `beforeunload`/tab-switch via `navigator.sendBeacon('/api/save', ...)` — pure risk mitigation against a student who writes code but never clicks Run before the timer expires, losing everything. Flagging this as a recommended addition, not a requirement change — happy to drop it if you'd rather keep the write path strictly Run-triggered.
+**Timer & notifications**:
+- On-screen countdown ticks locally every second (via `tickTimer()`); server-authoritative time is polled every heartbeat (~60s) to stay synchronized.
+- When 5 minutes remain (`timeRemainingSeconds === 300`), a modal alert notifies the student: "Session ending in 5 minutes. You will not be able to submit code once the timer reaches 0:00. Finish your work and run your code now."
+- When session transitions to `locked` (timeout or admin-triggered), code editor becomes read-only, Run button is disabled, and save status shows "Code has been locked and is being graded."
+
+**Student lock (mid-session instructor action)**:
+- If `student_locked` becomes true (admin locks this student via the accounts tab), on the next heartbeat poll the student receives `student_locked: true` and sees an alert: "Your account has been locked. You cannot save or run code. You can still view questions and results. Contact your instructor if you have questions."
+- When locked, the Run button is disabled, the code editor is read-only (no edits accepted), and the status line reads "Account locked — cannot submit." Any subsequent `/api/save` or `/api/run` requests are rejected server-side with 423 status.
+- If the instructor unlocks the student, the next heartbeat brings `student_locked: false` and triggers an unlock alert; the Run button and editor are re-enabled.
+- A locked student can still log in, view questions, browse saved code and previous run results, and see the leaderboard — just not modify/run code.
+
+**Autosave beyond the literal ask**: the user's design has the `.c` file overwritten only on Run-click. Recommend also autosaving on a debounced interval (~60s) and on `beforeunload`/tab-switch via `navigator.sendBeacon('/api/save', ...)` — pure risk mitigation against a student who writes code but never clicks Run before the timer expires, losing everything. Flagging this as a recommended addition, not a requirement change — happy to drop it if you'd rather keep the write path strictly Run-triggered.
 
 ## 10. Admin server — routes & UI flow
 
@@ -257,14 +272,18 @@ Built by extending `ui/app.py` rather than duplicating its question-editor route
 | Route | Method | Behavior |
 |---|---|---|
 | `/admin/login` | GET/POST | username + password → `accounts.authenticate_admin` (checks against `.env`) |
-| `/api/live/<lab>/accounts` | POST | generate `students.csv` from a roster (wraps `manage_accounts.generate`) |
+| `/api/live/<lab>/accounts` | GET | list all students: roll_no, name, password status, device/IP, last seen, **locked status**, with Reset password / Sign out device / **Lock/Unlock** buttons |
 | `/api/live/<lab>/accounts/<roll>/reset` | POST | reset one student's password |
-| `/api/live/<lab>/accounts/<roll>/unbind` | POST | clear bound IP |
+| `/api/live/<lab>/accounts/<roll>/unbind` | POST | clear bound IP (logout + allow new device) |
+| `/api/live/<lab>/accounts/<roll>/lock` | POST | mark this student's `locked=1` in students.csv; prevents save/run for this student until unlocked |
+| `/api/live/<lab>/accounts/<roll>/unlock` | POST | clear `locked` flag; student can save/run again |
 | `/api/live/<lab>/session/start` | POST | body `{duration_minutes}` → `live_session.start` |
 | `/api/live/<lab>/session/lock` | POST | force-end early |
 | `/api/live/<lab>/session/status` | GET | polled by the live dashboard |
 | `/api/live/<lab>/dashboard` | GET | per-student, per-question: logged in? IP bound? last Run timestamp + open-test pass count (read from each `<qid>_live.md`, or a small in-memory cache populated by `server_student` — see note below) |
 | `/api/live/<lab>/finalize` | POST | invokes `python -m grader.grade --questions questions/<lab> --submissions submissions/<lab> --out runs/<lab> ...` (subprocess or in-process `grade.main()` call), then `live_session.mark_finalized` |
+
+**Accounts tab**: displays all students with login/device/last-seen info and a "locked" column (🔒 Locked / 🔓 Unlocked). Each row has action buttons: Reset password (sets temporary password, admin shares directly with student), Sign out device (unbind + allow new device), and Lock/Unlock (real-time mid-session toggle for disruptive students). Lock changes are visible to the student on the very next heartbeat poll.
 
 **Dashboard data source**: the admin server can read `<qid>_live.md` files directly off disk (simple, zero coupling to `server_student`'s internals, matches the user's own stated design) — polled every few seconds by the dashboard page's JS, same pattern `ui/app.py` already uses for its existing dashboard route. No IPC between the two servers is needed for this.
 

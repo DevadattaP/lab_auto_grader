@@ -431,8 +431,185 @@ What it does:
   python -m ui.app
   ```
 
-1. If you change a few things about question configuration, scoring, etc, and rerun the grader, you can find only the changed marks by running following command:
+4. If you change a few things about question configuration, scoring, etc, and rerun the grader, you can find only the changed marks by running following command:
 
   ```bash
   python find_marks_changes.py --directory ./runs/lab_no
   ```
+
+## Live Lab Platform (v2) — Run labs in real-time with immediate feedback
+
+In addition to the offline batch grader (above), this project includes a **live lab platform** for conducting lab sessions in real-time on a lab PC. Students write C code in their browser, click "Run" to get instant feedback against open tests, and the instructor can monitor progress, control the timer, and finalize grading — all using the same underlying grading pipeline.
+
+Full design rationale, architecture, accounts/auth model, and security considerations live in [LIVE_LAB_DESIGN.md](LIVE_LAB_DESIGN.md). This section covers the **day-to-day workflow**.
+
+### How it works (briefly)
+
+Two separate Flask servers run on the instructor's lab PC:
+
+- **`server_student/`** (port 5001): Students log in with roll number + password, write C code in a CodeMirror editor, click "Run" for instant compile+test results against open tests only (hidden tests never sent to student side). Timer counts down; code autosaves every ~60s and on blur/tab-close. Once the session ends/locks, code becomes read-only.
+
+- **`server_admin/`** (port 5002): Instructor logs in, sees a live dashboard of which students are online and their per-question progress, controls the session (start/extend/lock timer), manages student accounts (reset password, sign out a device, lock/unlock a misbehaving student mid-session), and finalize+grades at session end using the exact same batch grader pipeline.
+
+Both servers read/write shared files on disk (`live/<lab>/students.csv` for accounts, `session.json` for timer state, `submissions/<lab>/` for live code) — no database needed. When the session ends, the instructor clicks "Finalize & Grade", which runs the batch grader on all saved code and publishes results/leaderboard back to students.
+
+### Setup
+
+**One-time:**
+
+```bash
+# Install additional dependencies for live platform
+pip install -r requirements.txt  # adds Flask, python-dotenv, filelock
+
+# Initialize admin credentials (prompted for username + password)
+python -m grader.manage_accounts init-admin
+
+# (Optional) Create a student name mapping CSV with name,roll_no columns and point to this file via .env so admin dashboard shows names
+echo "STUDENT_NAMES_CSV=student_names.csv" >> .env
+```
+
+**Per lab — accounts and passwords:**
+
+Student accounts are **global** (not per-lab) — once a student logs in anywhere, their password is set globally and reused across all labs. The first login uses a deterministic default password (`default_password(roll_no)` = roll number reversed + "@Cp"); the student must then create their own password.
+
+There are three ways to manage student accounts:
+
+**Option 1: Auto-generate with random passwords (recommended for first-time setup)**
+
+```bash
+# Create a roster of students (roll numbers, one per line)
+cat > roster.txt <<EOF
+112201001
+112201002
+112201003
+EOF
+
+# Generate accounts + passwords for this lab (creates live/accounts.csv if it doesn't exist)
+python -m grader.manage_accounts generate \
+  --lab lab_01 \
+  --roster roster.txt
+
+# Passwords are printed — share with students (shown once, never recoverable)
+# This creates live/accounts.csv (global, shared across all labs)
+```
+
+**Option 2: Let students use the default password on first login**
+
+```bash
+# No pre-generation needed. Students log in with:
+#   - roll_no: their roll number (e.g., 112201001)
+#   - password: roll_no reversed + "@Cp" (e.g., 112201001 → 100102211@Cp)
+# On first login, they're prompted to create their own password.
+```
+
+**Option 3: Manually reset/set a password**
+
+```bash
+# Set a specific password for a student (prompts for password, or use --password to script)
+python -m grader.manage_accounts reset-student --roll 112201001
+
+# Or script it:
+python -m grader.manage_accounts reset-student --roll 112201001 --password "MyNewPassword123"
+```
+
+**Global accounts file:**
+
+All student passwords are stored in `live/accounts.csv` (created automatically on first use). This file is **shared across all labs** — a student's password is the same whether they're doing lab_01, lab_02, or lab_03. The per-lab `live/lab_01/students.csv` (created when the session starts) tracks only that lab's session state (IP, last seen, locked status), not passwords.
+
+```
+live/
+├── accounts.csv              # Global, all students, all labs — password_hash, password_set flag
+├── lab_01/
+│   ├── students.csv          # Per-lab session state for lab_01 only
+│   └── session.json
+└── lab_02/
+    ├── students.csv          # Per-lab session state for lab_02 only
+    └── session.json
+```
+
+**Student name mapping (optional):**
+
+To show student names in the admin dashboard (instead of just roll numbers), create a CSV:
+
+```bash
+# Format: roll_no,name,ip (ip is optional, auto-filled at login)
+cat > student_names.csv <<EOF
+roll_no,name,ip
+112201001,Alice Singh,
+112201002,Bob Khan,
+112201003,Carol Das,
+EOF
+
+# Point to it via .env
+echo "STUDENT_NAMES_CSV=student_names.csv" >> .env
+```
+
+Then start the servers — the admin dashboard will show names alongside roll numbers.
+
+### Running a live lab session
+
+**1. Start the two servers** (on the lab PC, in separate terminals):
+
+```bash
+# Terminal 1 — Student server (students point browsers to http://<lab-pc-ip>:5001)
+python -m server_student.app --lab lab_01 --port 5001
+
+# Terminal 2 — Admin server (instructor browses to http://127.0.0.1:5002/admin)
+python -m server_admin.app --port 5002
+```
+
+**2. Admin logs in** at `http://127.0.0.1:5002/admin` with the credentials from `init-admin`.
+
+**3. Instructor controls the session:**
+
+- **Session tab**: Click "Start session", enter duration (e.g., 60 minutes) → timer starts counting down on all student screens.
+- **Accounts tab**: See all students, their login/device status, and can reset passwords, sign out devices, or **lock** a student mid-session (disables save/run for that student until unlocked).
+- **Live status tab**: Watch per-student, per-question progress (who's online, last run timestamp, open-test pass count).
+- **Finalize & Grade**: Once timer expires or you manually lock the session, this button becomes enabled. Click it to run the batch grader against all saved code, produce `summary.csv` + `report_*.md` + leaderboard → published back to students.
+
+**4. Students log in** at `http://<lab-pc-ip>:5001/login` with their roll number + the password they were given.
+
+- Editor loads, question list on left, code in center, results below.
+- Click "Run" to compile and test against open tests only (hidden tests stay hidden).
+- Code autosaves every ~60s, plus on tab-close or switch.
+- A 5-minute warning appears when time is running low.
+- Once session locks (time up or instructor locks it), editor becomes read-only, code can't be run.
+- After finalization, students can see their report and the leaderboard.
+
+### Key features
+
+| Feature | Why it matters |
+| --- | --- |
+| **Real-time feedback** | Students see compile errors and test results instantly, can fix and re-run within the same session. |
+| **Open tests only** | Hidden tests stay on the server, never sent to student processes — prevents cheating by reverse-engineering test data. |
+| **Autosave** | Code autosaves every ~60s and on tab-close via `sendBeacon`, so students don't lose work if their browser crashes. |
+| **5-minute warning** | Alert pops up when 5 minutes remain, reminding students to finish and run their code before lock. |
+| **Per-student lock** | Instructor can lock a disruptive student mid-session without affecting others — they can still view code and results, just can't modify/run. |
+| **Live dashboard** | Instructor sees who's online, how far each student has progressed, and can spot patterns (e.g., many students stuck on the same question). |
+| **One-command finalize** | Session ends → instructor clicks "Finalize" → batch grader runs, reports generated, leaderboard published — all reusing the exact offline grading pipeline, so marks are always consistent. |
+
+### Files created at runtime
+
+```
+live/lab_01/
+├── students.csv                # Generated by manage_accounts; updated by server_student on login/lock/unlock
+├── session.json                # Created when session starts; status/timer state updated by server_admin
+└── display_config.json         # Toggles (show_workspace_after_session, show_report, show_leaderboard) — runtime-editable by admin
+
+submissions/lab_01/
+├── 112201001/
+│   ├── q1.c                    # Live code saved by server_student on Run/autosave
+│   ├── q1_live.md              # Admin-visible live report for this question (rewritten on each Run)
+│   └── q2.c
+└── 112201002/
+    └── ...
+```
+
+### See also
+
+- [LIVE_LAB_DESIGN.md](LIVE_LAB_DESIGN.md) — Full architecture, security model, accounts/auth flow, concurrency, and sandbox pool design.
+- `grader/accounts.py` — Account management (authenticate, lock/unlock, reset password, bind device).
+- `grader/live_session.py` — Timer state (start, lock, check if writes are allowed).
+- `server_student/app.py` — Student-facing routes (login, questions, save, run, autosave via heartbeat).
+- `server_admin/app.py` — Admin-facing routes (session control, accounts, live dashboard, finalize).
+- `server_student/static/editor.js` — Client-side editor logic (CodeMirror, autosave, local timer ticker, lock/unlock UI updates).

@@ -45,7 +45,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from grader.discover import ROLL_NO_RE
 
-STUDENTS_CSV_FIELDS = ["roll_no", "ip", "active", "bound_at", "last_seen"]
+STUDENTS_CSV_FIELDS = ["roll_no", "ip", "active", "bound_at", "last_seen", "locked"]
 GLOBAL_ACCOUNTS_FILENAME = "accounts.csv"  # under live/ -- shared across every lab, see module docstring
 _GLOBAL_ACCOUNTS_FIELDS = ["roll_no", "password_hash", "password_set"]
 
@@ -66,6 +66,7 @@ class StudentAccount:
     active: bool = False  # is there a currently live (not-logged-out) session -- this, not `ip`, is what "one device at a time" actually enforces
     bound_at: str = ""
     last_seen: str = ""
+    locked: bool = False  # admin-controlled lock: prevents save/run/autosave for this student
 
 
 @dataclass
@@ -121,6 +122,7 @@ def _read_students(csv_path: Path) -> dict[str, StudentAccount]:
                 active=(row.get("active") or "") == "1",
                 bound_at=row.get("bound_at") or "",
                 last_seen=row.get("last_seen") or "",
+                locked=(row.get("locked") or "") == "1",
             )
             for row in reader
         }
@@ -143,6 +145,7 @@ def _write_students(csv_path: Path, accounts: dict[str, StudentAccount]) -> None
                     "active": "1" if a.active else "",
                     "bound_at": a.bound_at,
                     "last_seen": a.last_seen,
+                    "locked": "1" if a.locked else "",
                 }
             )
     tmp_path.replace(csv_path)
@@ -200,6 +203,29 @@ def unbind_student_device(csv_path: Path, roll_no: str) -> None:
         if roll_no not in accounts:
             raise AccountError(f"No account for roll number {roll_no} in {csv_path}")
         accounts[roll_no].active = False
+        _write_students(csv_path, accounts)
+
+
+def lock_student(csv_path: Path, roll_no: str) -> None:
+    """Prevents a student from saving/running/autosaving code -- admin can
+    lock a misbehaving or disruptive student mid-session."""
+    roll_no = normalize_roll_no(roll_no)
+    with _csv_lock(csv_path):
+        accounts = _read_students(csv_path)
+        if roll_no not in accounts:
+            raise AccountError(f"No account for roll number {roll_no} in {csv_path}")
+        accounts[roll_no].locked = True
+        _write_students(csv_path, accounts)
+
+
+def unlock_student(csv_path: Path, roll_no: str) -> None:
+    """Re-enables code saving/running for a locked student."""
+    roll_no = normalize_roll_no(roll_no)
+    with _csv_lock(csv_path):
+        accounts = _read_students(csv_path)
+        if roll_no not in accounts:
+            raise AccountError(f"No account for roll number {roll_no} in {csv_path}")
+        accounts[roll_no].locked = False
         _write_students(csv_path, accounts)
 
 
