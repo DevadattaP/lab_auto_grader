@@ -1,0 +1,14 @@
+.git
+.gitignore
+venv
+__pycache__
+**/__pycache__
+*.pyc
+runs
+submissions
+live
+*.csv
+.env
+AUTOGRADER_DESIGN.md
+LIVE_LAB_DESIGN.md
+README.md

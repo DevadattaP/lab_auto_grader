@@ -1,0 +1,45 @@
+services:
+  student:
+    build: .
+    image: lab-auto-grader:latest
+    container_name: lab-auto-grader-student
+    # No isolate in this image -- it needs a cgroup v2 host kernel, which
+    # this container can't provide on its own if the host (e.g. Oracle
+    # Linux 8) boots into cgroup v1. --sandbox subprocess uses the grader's
+    # rlimit-based fallback: real CPU/wall-time/memory/process-count limits,
+    # without filesystem/network isolation between student runs. No
+    # --privileged needed.
+    command: >
+      python -m server_student.app
+      --lab lab_01
+      --host 0.0.0.0
+      --port 5001
+      --sandbox subprocess
+      --sandbox-slots 4
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./questions:/app/questions
+      - ./submissions:/app/submissions
+      - ./runs:/app/runs
+      - ./live:/app/live
+      - ./.env:/app/.env
+    restart: unless-stopped
+
+  admin:
+    build: .
+    image: lab-auto-grader:latest
+    container_name: lab-auto-grader-admin
+    command: >
+      python -m server_admin.app
+      --host 0.0.0.0
+      --port 5002
+    ports:
+      - "5002:5002"
+    volumes:
+      - ./questions:/app/questions
+      - ./submissions:/app/submissions
+      - ./runs:/app/runs
+      - ./live:/app/live
+      - ./.env:/app/.env
+    restart: unless-stopped
