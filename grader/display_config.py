@@ -1,6 +1,11 @@
-"""Per-lab, runtime-editable display toggles for what stays visible to
-students once a session is finalized: workspace browsing (questions/saved
-code/last run results), the per-student report, and the leaderboard, each
+"""Per-lab, runtime-editable toggles controlling what's visible to, and who
+can log in as, students: three for what stays visible once a session is
+finalized (workspace browsing -- questions/saved code/last run results --,
+the per-student report, and the leaderboard), one for whether the
+question-paper PDF can be downloaded while the session is live, and one
+login-policy toggle (restrict_login_to_roster) restricting new logins to
+roll numbers present in the student-name-mapping CSV (see
+grader.discover.load_student_mapping / --student-names-csv). Each
 independently on/off.
 
 Exists because server_admin (which sets these) and server_student (which
@@ -29,6 +34,11 @@ class DisplayConfig:
     show_workspace_after_session: bool = True
     show_report: bool = True
     show_leaderboard: bool = True
+    show_question_paper: bool = True
+    # Off by default: without a roster CSV loaded, turning this on would
+    # lock every student out (see server_student.api_login), so it must
+    # stay an explicit admin opt-in rather than a new default.
+    restrict_login_to_roster: bool = False
 
 
 def _path(live_dir: Path) -> Path:

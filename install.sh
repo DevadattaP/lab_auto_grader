@@ -4,7 +4,9 @@ set -e
 # Lab Auto-Grader Installation Script
 # This script sets up the lab auto-grader platform with:
 # - Python environment and dependencies
-# - isolate sandbox (with cgroup v2 setup)
+# - isolate sandbox (with cgroup v2 setup) -- only if this machine already
+#   has cgroup v2 unified hierarchy; otherwise configures --sandbox
+#   subprocess instead rather than suggesting a GRUB edit to force v2
 # - Admin account initialization
 # - Quick-start instructions
 
@@ -12,6 +14,12 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+
+# Which sandbox backend this run ends up configured for -- "isolate" unless
+# check_os_and_cgroups() downgrades it to "subprocess" (see there for why).
+# Read by main() to decide whether to call install_isolate() at all, and by
+# print_usage_instructions() to print the matching --sandbox flag.
+SANDBOX_MODE="isolate"
 
 # Helper functions
 print_status() {
@@ -59,14 +67,26 @@ check_os_and_cgroups() {
         else
             print_error "cgroup v2 unified hierarchy NOT detected"
             print_warning "cgroup type: $cgroup_type"
-            print_warning "isolate requires cgroup v2. If on legacy v1 or hybrid cgroup, you need:"
-            print_warning "  1. Add 'systemd.unified_cgroup_hierarchy=1' to GRUB kernel command line"
-            print_warning "  2. Run: sudo update-grub && sudo reboot"
+            print_warning "isolate requires cgroup v2. This machine is on legacy v1 or hybrid mode."
             echo ""
-            read -p "Continue anyway? (y/n) " -n 1 -r
+            print_warning "Forcing v2 (adding 'systemd.unified_cgroup_hierarchy=1' to the GRUB kernel"
+            print_warning "command line, then update-grub + reboot) is NOT recommended here: it changes"
+            print_warning "cgroup behavior for the whole machine, can break other software still"
+            print_warning "expecting v1 (older Docker/container runtimes, some system services), and"
+            print_warning "isn't easily reversible without another kernel-command-line edit + reboot."
+            echo ""
+            print_warning "Recommended: skip isolate and use the 'subprocess' sandbox instead. It runs"
+            print_warning "student code without cgroup/isolate, at the cost of weaker isolation"
+            print_warning "(no filesystem/network sandboxing, best-effort resource limits via rlimits"
+            print_warning "only) -- a real, supported mode for this grader, not just for local testing."
+            echo ""
+            read -p "Install isolate anyway, forcing ahead on this unsupported cgroup setup? (y/N) " -n 1 -r
             echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                exit 1
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                print_warning "Proceeding with isolate on an unsupported cgroup setup -- the smoke test later may fail."
+            else
+                SANDBOX_MODE="subprocess"
+                print_status "Skipping isolate -- this install will be configured for --sandbox subprocess."
             fi
         fi
     fi
@@ -86,15 +106,17 @@ check_and_install_deps() {
         print_status "Python 3 found: $(python3 --version)"
     fi
 
-    # Check git (needed for isolate)
-    if ! command -v git &> /dev/null; then
+    # git is only needed to clone isolate's source -- skip the check in
+    # subprocess mode, where nothing here builds isolate.
+    if [[ "$SANDBOX_MODE" == "isolate" ]] && ! command -v git &> /dev/null; then
         print_warning "git not found - will install"
         deps_needed=1
-    else
+    elif [[ "$SANDBOX_MODE" == "isolate" ]]; then
         print_status "git found"
     fi
 
-    # Check build tools (needed for isolate)
+    # Check build tools (needed to compile student code either way, not
+    # just for isolate itself)
     if ! command -v gcc &> /dev/null; then
         print_warning "build-essential not found - will install"
         deps_needed=1
@@ -105,10 +127,14 @@ check_and_install_deps() {
     if [[ $deps_needed -eq 1 ]]; then
         print_step "Installing system dependencies"
         sudo apt update
-        sudo apt install -y \
-            python3 python3-venv python3-pip \
-            build-essential libseccomp-dev libcap-dev pkg-config \
-            git libsystemd-dev asciidoc-base
+        if [[ "$SANDBOX_MODE" == "isolate" ]]; then
+            sudo apt install -y \
+                python3 python3-venv python3-pip \
+                build-essential libseccomp-dev libcap-dev pkg-config \
+                git libsystemd-dev asciidoc-base
+        else
+            sudo apt install -y python3 python3-venv python3-pip build-essential
+        fi
         print_status "System dependencies installed"
     else
         print_status "All system dependencies found"
@@ -272,7 +298,21 @@ init_admin_account() {
 print_usage_instructions() {
     print_step "Installation Complete!"
 
-    cat << 'EOF'
+    local troubleshooting=""
+    if [[ "$SANDBOX_MODE" == "isolate" ]]; then
+        troubleshooting="TROUBLESHOOTING:
+   - isolate smoke test: isolate --box-id=0 --cg --init && isolate --box-id=0 --cg --cleanup
+   - Check isolate.service: sudo systemctl status isolate.service
+   - Check cgroup v2: stat -fc %T /sys/fs/cgroup (should show cgroup2fs)
+"
+    else
+        troubleshooting="NOTE: this install is configured for --sandbox subprocess (cgroup v2 was not
+detected, and isolate was skipped -- see README.md for how to switch to
+isolate later if this machine's cgroup setup changes).
+"
+    fi
+
+    cat << EOF
 
 Next steps:
 
@@ -284,19 +324,18 @@ Next steps:
    See AUTOGRADER_DESIGN.md for the YAML format.
 
 3. FOR OFFLINE GRADING:
-   python -m grader.grade \
-     --questions questions/lab_01 \
-     --submissions submissions/lab_01 \
-     --out runs/lab_01 \
-     --sandbox isolate \
+   python -m grader.grade \\
+     --questions questions/lab_01 \\
+     --submissions submissions/lab_01 \\
+     --out runs/lab_01 \\
+     --sandbox $SANDBOX_MODE \\
      --parallel 4
 
 4. FOR LIVE LAB SESSIONS:
 
-   a) (Optional) Generate student accounts (one-time per lab):
-      python -m grader.manage_accounts generate \
-        --lab lab_01 \
-        --roster roster.txt
+   a) Students log in with the default password (their roll number reversed
+      + "@Cp") and set their own on first login -- no account pre-generation
+      needed. See README.md for the optional student-roster CSV.
 
    b) Start student server (http://<lab-pc-ip>:5001):
       python -m server_student.app --lab lab_01 --port 5001
@@ -314,11 +353,7 @@ DOCUMENTATION:
    - LIVE_LAB_DESIGN.md — Live platform architecture, authentication, security
    - README.md — Day-to-day reference, examples
 
-TROUBLESHOOTING:
-   - isolate smoke test: isolate --box-id=0 --cg --init && isolate --box-id=0 --cg --cleanup
-   - Check isolate.service: sudo systemctl status isolate.service
-   - Check cgroup v2: stat -fc %T /sys/fs/cgroup (should show cgroup2fs)
-
+$troubleshooting
 EOF
 }
 
@@ -348,7 +383,11 @@ EOF
     check_sudo
     check_os_and_cgroups
     check_and_install_deps
-    install_isolate
+    if [[ "$SANDBOX_MODE" == "isolate" ]]; then
+        install_isolate
+    else
+        print_step "Skipping isolate installation (using --sandbox subprocess)"
+    fi
     setup_python_venv
     create_directories
     init_admin_account

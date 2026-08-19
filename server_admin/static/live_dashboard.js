@@ -15,6 +15,14 @@
   let currentStatus = "not_started";
   let timeRemainingSeconds = 0;
   let lastServerUpdateTime = 0;
+  // True from the moment Finalize is clicked (or found already running on
+  // page load) until pollFinalizeStatus() sees it reach done/error. Session
+  // status stays "locked" for the *entire* grading run (it only becomes
+  // "finalized" once grading actually completes), so without this flag,
+  // loadSessionStatus()'s own 5s poll would re-enable the button mid-run --
+  // its `data.status !== "locked"` check can't tell "locked, not yet
+  // finalizing" from "locked, currently finalizing" apart on its own.
+  let finalizeRunning = false;
 
   async function api(path, opts) {
     const res = await fetch(path, opts);
@@ -48,7 +56,10 @@
       btn.classList.add("active");
       document.querySelectorAll(".admin-tab-panel").forEach((p) => (p.hidden = true));
       document.getElementById(`tab-${btn.dataset.tab}`).hidden = false;
-      if (btn.dataset.tab === "accounts") loadAccounts();
+      if (btn.dataset.tab === "accounts") {
+        loadAccounts();
+        loadRestrictRosterConfig();
+      }
       if (btn.dataset.tab === "live") loadLiveStatus();
     });
   });
@@ -77,7 +88,9 @@
     if (data.finalized_run) lines.push(`Finalized run: ${data.finalized_run}`);
     sessionStatusBoxEl.innerHTML = lines.join("<br>");
 
-    finalizeBtn.disabled = data.status !== "locked";
+    if (!finalizeRunning) {
+      finalizeBtn.disabled = data.status !== "locked";
+    }
   }
 
   document.getElementById("start-btn").addEventListener("click", async () => {
@@ -122,6 +135,7 @@
   const cfgWorkspaceEl = document.getElementById("cfg-workspace");
   const cfgReportEl = document.getElementById("cfg-report");
   const cfgLeaderboardEl = document.getElementById("cfg-leaderboard");
+  const cfgQuestionPaperEl = document.getElementById("cfg-question-paper");
 
   async function loadDisplayConfig() {
     const { ok, data } = await api(`/api/live/${labId}/display-config`);
@@ -129,6 +143,7 @@
     cfgWorkspaceEl.checked = data.show_workspace_after_session;
     cfgReportEl.checked = data.show_report;
     cfgLeaderboardEl.checked = data.show_leaderboard;
+    cfgQuestionPaperEl.checked = data.show_question_paper;
   }
 
   document.getElementById("save-display-config-btn").addEventListener("click", async () => {
@@ -139,6 +154,7 @@
         show_workspace_after_session: cfgWorkspaceEl.checked,
         show_report: cfgReportEl.checked,
         show_leaderboard: cfgLeaderboardEl.checked,
+        show_question_paper: cfgQuestionPaperEl.checked,
       }),
     });
     displayConfigMsgEl.textContent = ok
@@ -148,15 +164,69 @@
 
   /* ------------------------------------------------------------ accounts */
 
+  const cfgRestrictRosterEl = document.getElementById("cfg-restrict-roster");
+  const restrictRosterMsgEl = document.getElementById("restrict-roster-msg");
+  let lastKnownRosterSize = 0;
+
+  // Own load/save, separate from loadDisplayConfig/save-display-config-btn
+  // above: this toggle lives on the Accounts tab (not Session), is a
+  // login-time policy rather than something students see mid-session, and
+  // saves immediately on change rather than waiting for a batched "Save"
+  // click, matching a plain on/off switch.
+  async function loadRestrictRosterConfig() {
+    const { ok, data } = await api(`/api/live/${labId}/display-config`);
+    if (!ok) return;
+    cfgRestrictRosterEl.checked = data.restrict_login_to_roster;
+    lastKnownRosterSize = data.roster_size;
+    restrictRosterMsgEl.textContent = "";
+  }
+
+  cfgRestrictRosterEl.addEventListener("change", async () => {
+    const enabling = cfgRestrictRosterEl.checked;
+    if (enabling && lastKnownRosterSize === 0) {
+      alert(
+        "No student-names CSV is loaded for this server (--student-names-csv / $STUDENT_NAMES_CSV / " +
+          "live/student_names.csv) -- turning this on right now would lock out every student. " +
+          "Load a roster first, then enable this."
+      );
+      cfgRestrictRosterEl.checked = false;
+      return;
+    }
+    const { ok, data } = await api(`/api/live/${labId}/display-config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restrict_login_to_roster: enabling }),
+    });
+    if (!ok) {
+      cfgRestrictRosterEl.checked = !enabling; // revert on failure
+      restrictRosterMsgEl.textContent = data.error || "Failed to save.";
+      return;
+    }
+    restrictRosterMsgEl.textContent = enabling
+      ? `Saved -- only the ${lastKnownRosterSize} roll number(s) in the roster can log in from now on.`
+      : "Saved -- any roll number can log in again.";
+  });
+
+  const accountsSelectAllEl = document.getElementById("accounts-select-all");
+  const accountsBulkToolbarEl = document.getElementById("accounts-bulk-toolbar");
+  const accountsBulkCountEl = document.getElementById("accounts-bulk-count");
+  const bulkUnbindBtn = document.getElementById("bulk-unbind-btn");
+  const bulkLockToggleBtn = document.getElementById("bulk-lock-toggle-btn");
+  let accountsByRoll = new Map(); // roll_no -> account data, refreshed each loadAccounts()
+
   async function loadAccounts() {
     const { ok, data } = await api(`/api/live/${labId}/accounts`);
     const tbody = document.querySelector("#accounts-table tbody");
     tbody.innerHTML = "";
+    accountsByRoll = new Map();
+    accountsSelectAllEl.checked = false;
     if (!ok || !data.accounts.length) {
-      tbody.innerHTML = `<tr><td colspan="7" class="hint">No students have signed in for this lab yet.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="hint">No students have signed in for this lab yet.</td></tr>`;
+      updateBulkToolbar();
       return;
     }
     for (const a of data.accounts) {
+      accountsByRoll.set(a.roll_no, a);
       const tr = document.createElement("tr");
       // `active` is the real online/offline signal; `ip` is a persistent
       // "last device used" record that survives logout (kept for the
@@ -175,6 +245,7 @@
         ? `<span style="color: #d9534f; font-weight: bold;">🔒 Locked</span>`
         : `<span style="color: #5cb85c;">🔓 Unlocked</span>`;
       tr.innerHTML = `
+        <td><input type="checkbox" class="account-select" data-roll="${a.roll_no}"></td>
         <td>${a.roll_no}</td>
         <td>${a.name || "-"}</td>
         <td>${passwordStatus}</td>
@@ -189,9 +260,77 @@
       tr.querySelector('[data-action="reset"]').addEventListener("click", () => resetAccount(a.roll_no));
       tr.querySelector('[data-action="unbind"]').addEventListener("click", () => unbindAccount(a.roll_no));
       tr.querySelector('[data-action="lock-toggle"]').addEventListener("click", () => toggleLockAccount(a.roll_no, a.locked));
+      tr.querySelector(".account-select").addEventListener("change", updateBulkToolbar);
       tbody.appendChild(tr);
     }
+    updateBulkToolbar();
   }
+
+  function selectedRollNumbers() {
+    return Array.from(document.querySelectorAll(".account-select:checked")).map((cb) => cb.dataset.roll);
+  }
+
+  // Toolbar visibility/state after any checkbox change: shown only when at
+  // least one row is selected. The lock/unlock button reflects the
+  // selection's locked state -- "Lock" + enabled only if every selected
+  // account is currently unlocked, "Unlock" + enabled only if every
+  // selected account is currently locked, disabled (mixed selection)
+  // otherwise, per the admin's explicit requirement that a mixed
+  // lock/unlock selection must not be actionable in either direction.
+  function updateBulkToolbar() {
+    const selected = selectedRollNumbers();
+    accountsBulkToolbarEl.hidden = selected.length === 0;
+    if (selected.length === 0) return;
+
+    accountsBulkCountEl.textContent = `${selected.length} selected`;
+
+    const lockedStates = selected.map((roll) => accountsByRoll.get(roll).locked);
+    const allUnlocked = lockedStates.every((locked) => locked === false);
+    const allLocked = lockedStates.every((locked) => locked === true);
+
+    if (allLocked) {
+      bulkLockToggleBtn.textContent = "Unlock";
+      bulkLockToggleBtn.disabled = false;
+    } else if (allUnlocked) {
+      bulkLockToggleBtn.textContent = "Lock";
+      bulkLockToggleBtn.disabled = false;
+    } else {
+      bulkLockToggleBtn.textContent = "Lock/Unlock";
+      bulkLockToggleBtn.disabled = true;
+    }
+  }
+
+  accountsSelectAllEl.addEventListener("change", () => {
+    document.querySelectorAll(".account-select").forEach((cb) => {
+      cb.checked = accountsSelectAllEl.checked;
+    });
+    updateBulkToolbar();
+  });
+
+  bulkUnbindBtn.addEventListener("click", async () => {
+    const selected = selectedRollNumbers();
+    if (selected.length === 0) return;
+    if (!confirm(`Sign out ${selected.length} student device(s)? Each will be signed out and can log in from a new device.`)) return;
+    for (const roll of selected) {
+      await api(`/api/live/${labId}/accounts/${encodeURIComponent(roll)}/unbind`, { method: "POST" });
+    }
+    await loadAccounts();
+  });
+
+  bulkLockToggleBtn.addEventListener("click", async () => {
+    const selected = selectedRollNumbers();
+    if (selected.length === 0 || bulkLockToggleBtn.disabled) return;
+    const locking = bulkLockToggleBtn.textContent === "Lock";
+    const endpoint = locking ? "lock" : "unlock";
+    const msg = locking
+      ? `Lock ${selected.length} student(s)? They will not be able to save or run code.`
+      : `Unlock ${selected.length} student(s)? They will be able to save and run code again.`;
+    if (!confirm(msg)) return;
+    for (const roll of selected) {
+      await api(`/api/live/${labId}/accounts/${encodeURIComponent(roll)}/${endpoint}`, { method: "POST" });
+    }
+    await loadAccounts();
+  });
 
   async function resetAccount(roll_no) {
     const new_password = prompt(`New password for ${roll_no}:`);
@@ -305,6 +444,7 @@
     }
     clearInterval(finalizePollTimer);
     finalizePollTimer = null;
+    finalizeRunning = false;
     finalizeBtn.disabled = false;
 
     if (data.status === "done") {
@@ -321,11 +461,13 @@
 
   finalizeBtn.addEventListener("click", async () => {
     if (!confirm("Run the full grader now? This grades every student's saved code, including hidden tests, and publishes results/leaderboard to students.")) return;
+    finalizeRunning = true;
     finalizeBtn.disabled = true;
     finalizeMsgEl.textContent = "Starting grading run...";
     finalizeOutputEl.hidden = true;
     const { ok, data } = await api(`/api/live/${labId}/finalize`, { method: "POST" });
     if (!ok) {
+      finalizeRunning = false;
       finalizeBtn.disabled = false;
       finalizeMsgEl.textContent = data.error || "Failed to start grading run.";
       return;
@@ -341,6 +483,7 @@
   (async () => {
     const { data } = await api(`/api/live/${labId}/finalize/status`);
     if (data.status === "running") {
+      finalizeRunning = true;
       finalizeBtn.disabled = true;
       finalizePollTimer = setInterval(pollFinalizeStatus, 3000);
       await pollFinalizeStatus();

@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, abort, jsonify, redirect, render_template, request, session
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, session
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -151,6 +151,26 @@ def _get_student_locked_status(roll_no: str) -> bool:
     return account is not None and account.locked
 
 
+def _question_paper_path() -> Path:
+    return QUESTIONS_DIR / f"{LAB_ID}_qp.pdf"
+
+
+def _question_paper_available(state) -> bool:
+    """Deliberately different from _workspace_gate_error: reachable while
+    the session is actually running, and again once finalized (per the
+    admin's explicit ask -- students should be able to revisit the paper
+    alongside their published report/leaderboard), but never while merely
+    locked (mid-grading, not yet finalized) or before the session has
+    started. Also gated by the admin's own show_question_paper toggle
+    (grader.display_config, same runtime-editable mechanism as
+    show_workspace_after_session etc.) and by the file actually existing."""
+    return (
+        state.status in (live_session.STATUS_RUNNING, live_session.STATUS_FINALIZED)
+        and display_config.get_config(LIVE_DIR).show_question_paper
+        and _question_paper_path().is_file()
+    )
+
+
 def _source_path(roll_no: str, question) -> Path:
     return SUBMISSIONS_DIR / roll_no / question.filename_patterns[0]
 
@@ -205,6 +225,20 @@ def api_login():
     roll_no = str(data.get("roll_no", ""))
     password = str(data.get("password", ""))
     try:
+        # Checked BEFORE authenticate_student, not after: that call
+        # auto-provisions a brand-new global account on a correct
+        # default-password attempt (see its own docstring), so checking
+        # roster membership afterwards would let an unlisted roll number's
+        # first attempt silently create an account moments before being
+        # rejected. Same error message/shape as a genuinely wrong
+        # roll_no/password so an unlisted student can't tell the
+        # difference from a typo. Off by default (DisplayConfig) -- most
+        # labs never turn this on, so the common case pays only one cheap
+        # dict lookup per login attempt.
+        if display_config.get_config(LIVE_DIR).restrict_login_to_roster:
+            normalized_for_roster_check = accounts.normalize_roll_no(roll_no)
+            if normalized_for_roster_check not in STUDENT_MAPPING.entries:
+                raise accounts.AccountError("Incorrect roll number or password.")
         normalized, must_set_password = accounts.authenticate_student(
             STUDENTS_CSV, GLOBAL_ACCOUNTS_PATH, roll_no, password, request.remote_addr
         )
@@ -285,6 +319,7 @@ def api_session_status():
     roll_no = _current_roll_no()
     state = live_session.auto_lock_if_expired(LIVE_DIR)
     locked = _get_student_locked_status(roll_no)
+    paper_available = _question_paper_available(state)
     return jsonify(
         {
             "status": state.status,
@@ -293,6 +328,7 @@ def api_session_status():
             "time_remaining_seconds": live_session.time_remaining_seconds(LIVE_DIR),
             "finalized_run": state.finalized_run,
             "student_locked": locked,
+            "question_paper_available": paper_available,
         }
     )
 
@@ -387,6 +423,21 @@ def api_question_detail(qid: str):
             "last_run_stale": last_run_stale,
         }
     )
+
+
+@app.get("/api/question-paper")
+def api_question_paper():
+    # Same auth as every other student endpoint -- this is not a static
+    # asset (nothing under server_student/static/ is auth-gated), so a
+    # student must have a live, current session to fetch it, and the file
+    # itself lives under questions/<lab_id>/ rather than server_student's
+    # own static folder to keep it scoped to this process's one lab.
+    _current_roll_no()
+    state = live_session.auto_lock_if_expired(LIVE_DIR)
+    if not _question_paper_available(state):
+        abort(403, "The question paper is not available right now.")
+    pdf_path = _question_paper_path()
+    return send_file(pdf_path, mimetype="application/pdf", as_attachment=False, download_name=f"{LAB_ID}_question_paper.pdf")
 
 
 # --------------------------------------------------------------------------

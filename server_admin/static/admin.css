@@ -138,6 +138,15 @@ button.secondary {
   margin-bottom: 14px;
   flex-wrap: wrap;
 }
+/* Author CSS setting `display` always beats the browser's default
+   `[hidden] { display: none }` rule, regardless of selector specificity
+   (origin/importance is sorted before specificity in the cascade) -- so
+   .form-row's own `display: flex` above would otherwise silently defeat
+   `hidden` on the bulk-actions toolbar, leaving it visible with stale
+   content even with no rows selected. */
+.form-row[hidden] {
+  display: none;
+}
 /* .form-row's default `align-items: center` centers each item's *whole*
    box -- fine for a single-line label or a lone button, but wrong for a
    text-above-input label (two lines tall) paired with a single-line

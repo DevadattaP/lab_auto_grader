@@ -59,6 +59,62 @@ sudo chown -R $(id -u):$(id -g) questions submissions runs live .env
 root inside, same trick used to reach these files in the first place:
 `docker run --rm -v "$PWD":/fix -w /fix lab-auto-grader:latest chown -R $(id -u):$(id -g) questions submissions runs live .env`)
 
+## Getting files back after using Docker (running locally, copying submissions out)
+
+Everything the containers ever wrote to — every submission, every run
+report, every `live/lab_XX/*.csv` and `*.lock` — is root-owned on the host
+for the reason above. Two situations this bites:
+
+- **Copying submission files out to study them** (`cp submissions/lab_01/<roll>/... somewhere/`)
+  works fine as a *read* even root-owned (the files are typically
+  world-readable), but you may not be able to overwrite/delete/move them
+  as yourself, or `cp -p`/`rsync` may complain preserving ownership.
+- **Running the app locally without Docker** (`python -m server_admin.app`,
+  `python -m server_student.app`, straight in a venv) fails outright, not
+  just inconveniently — `grader/live_session.py` and `grader/accounts.py`
+  take a cross-process `filelock` on files like `live/lab_01/session.json.lock`
+  before reading/writing the CSVs, and if that `.lock` file is root-owned,
+  your local process (running as you) can't even open it:
+
+  ```text
+  PermissionError: [Errno 13] Permission denied: '.../live/lab_01/session.json.lock'
+  ```
+
+  This isn't a Docker-specific lock or anything requiring `docker` commands
+  to release — it's the same root-owned-file situation as everything else,
+  just surfacing as a crash instead of a copy annoyance because the app
+  itself needs write access to that file, not just read.
+
+**Fix, once, whenever you're about to work with this data outside Docker**
+(reclaims ownership — doesn't touch file contents, doesn't need Docker
+running, safe to run repeatedly):
+
+```bash
+docker run --rm -v "$PWD":/fix -w /fix lab-auto-grader:latest \
+  chown -R $(id -u):$(id -g) questions submissions runs live .env
+```
+
+After this, `cp`/`mv`/`rm` on any submission or report file works normally,
+and the local (non-Docker) server starts cleanly. You don't need Docker
+Compose running for this — it's a one-shot throwaway container just to get
+root's `chown` privilege for a second, same trick as the earlier `.env`
+fix. Safe to run this anytime, container running or not; it only ever
+loosens ownership back to you, never deletes or corrupts anything.
+
+**This isn't permanent — running Docker again will re-root-own *new*
+files.** Confirmed by hand: after the `chown` above, starting the
+containers again doesn't error (root can freely read/write files owned by
+anyone, so it doesn't care who owns what) and doesn't flip *existing*
+files back to root (writing to a file that's already there doesn't change
+its owner) — but any genuinely *new* file or folder the containers create
+from that point on (a new student's submission, a new `runs/<timestamp>/`
+report, a new `live/lab_XX/bin/<roll>/` sandbox output) comes out
+root-owned again, same as before, because whoever creates a file becomes
+its owner and that's still root inside the container. So this is really a
+"run it again whenever you next need to work with the data outside
+Docker" step (after a live session, before Finalize's report review, etc.)
+— not a one-time fix.
+
 ## Concurrency and fork-bomb hardening
 
 `SandboxPool` (`grader/sandbox_pool.py`) hands each concurrent Run/Finalize
@@ -174,7 +230,24 @@ in `docker-compose.yml`'s `student` service to roughly that point, then
 
    `init-admin` prompts for an admin username/password and writes the real
    `.env` contents into that file (bind-mounted into both containers, so no
-   rebuild needed afterward).
+   rebuild needed afterward). It runs as root (the `admin` service's user —
+   see "Why both containers run as root" above), so the `.env` it writes
+   comes out **root-owned on the host, mode `rw-rw----`** — readable by
+   root only, not even by your own host user. This isn't just the usual
+   root-owned-file annoyance: unlike `questions/`/`submissions/`/`runs/`
+   (which only the *containers* need to read), `.env` is also read by
+   `docker compose` itself, running as your host user, to set up the bind
+   mount — so a `docker compose up` right after `init-admin` fails outright
+   with `open .../.env: permission denied`, not just an inconvenience to
+   fix later. Reclaim it immediately after `init-admin`, every time:
+
+   ```bash
+   docker run --rm -v "$PWD":/fix -w /fix lab-auto-grader:latest chown $(id -u):$(id -g) .env
+   ```
+
+   (If you already hit the `permission denied` error: this same command
+   fixes it — no need to redo `init-admin`, the real credentials are
+   already written, just unreadable until this runs.)
 
 4. Make sure `questions/lab_01/` (or whichever lab) has real question
    content — it's bind-mounted from the host, so edit it directly on the

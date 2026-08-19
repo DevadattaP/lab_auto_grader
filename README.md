@@ -42,15 +42,15 @@ chmod +x install.sh
 ```
 
 The script will:
-- Check OS and cgroup v2 support (required for `isolate`)
-- Install system dependencies (build tools, Python)
-- Build and install `isolate` sandbox from source
+- Check OS and cgroup v2 support. If cgroup v2 unified hierarchy isn't already active, it will **not** suggest editing GRUB to force it (see the warning under "Installing `isolate`" below) — it asks whether to install `isolate` anyway on the unsupported setup, or skip it and configure everything for `--sandbox subprocess` instead (recommended)
+- Install system dependencies (build tools, Python, plus `isolate`'s own build deps only if `isolate` is actually being installed)
+- Build and install `isolate` sandbox from source (skipped entirely in subprocess mode)
 - Create Python virtual environment in project folder
 - Install Python dependencies
 - Create necessary directories (`questions/`, `submissions/`, `runs/`, `live/`)
 - Initialize admin account (interactive prompt)
 
-After completion, follow the printed next-steps guide.
+After completion, follow the printed next-steps guide — it prints `--sandbox subprocess` in the example commands if that's the mode this install ended up in.
 
 ### Manual setup (if needed)
 
@@ -67,6 +67,8 @@ pip install -r requirements.txt  # installs PyYAML, Flask, dependencies
 #### Installing `isolate`
 
 `isolate` (`github.com/ioi/isolate`) is the sandbox the grader runs student code in — see [AUTOGRADER_DESIGN.md §5.2](AUTOGRADER_DESIGN.md) for why it was chosen and the full threat model. It isn't packaged for Ubuntu 24.04, so it's built from source. This is a one-time, root-level setup on the grading machine.
+
+**Only install `isolate` if your machine already boots into cgroup v2 unified hierarchy by default.** Check first: `stat -fc %T /sys/fs/cgroup` — `cgroup2fs` means yes, you're good to proceed below. Anything else (`tmpfs`, most commonly) means your machine is on legacy v1 or hybrid mode. **Do not** "fix" this by editing GRUB (`systemd.unified_cgroup_hierarchy=1` + `update-grub` + reboot) just to install `isolate` — forcing a running system from cgroup v1 to v2 can break other software on the machine that still assumes v1 (older Docker/container runtimes, some system services), and it's not easily reversible without another kernel-command-line edit and reboot. If your machine isn't already on v2, use `--sandbox subprocess` instead (see the [sandbox flag table](#useful-flags) below) — it skips `isolate` entirely, at the cost of weaker isolation (no filesystem/network sandboxing, best-effort resource limits only via rlimits). That's a real, supported mode for this grader, not just a fallback for local testing.
 
 **1. Build and install:**
 
@@ -132,7 +134,7 @@ isolate --box-id=0 --cg --init && isolate --box-id=0 --cg --cleanup
 
 If both lines run with no error, you're set. If it fails with `User isolate not found in /etc/subuid`, step 2 didn't take effect (check `id isolate` and `grep isolate /etc/subuid /etc/subgid`). If it fails with something cgroup-related, `isolate.service` isn't active (check `systemctl status isolate.service`).
 
-If your machine doesn't have cgroup v2 unified hierarchy (check with `stat -fc %T /sys/fs/cgroup` — should print `cgroup2fs`), see [AUTOGRADER_DESIGN.md §5.2](AUTOGRADER_DESIGN.md) for the v1/hybrid/none cases and how to force full v2.
+If your machine doesn't have cgroup v2 unified hierarchy (check with `stat -fc %T /sys/fs/cgroup` — should print `cgroup2fs`), prefer running with `--sandbox subprocess` instead of forcing v2 — see the warning above. [AUTOGRADER_DESIGN.md §5.2](AUTOGRADER_DESIGN.md) documents the v1/hybrid/none cases in full for reference.
 
 ## Running a grading batch
 
@@ -496,28 +498,9 @@ echo "STUDENT_NAMES_CSV=student_names.csv" >> .env
 
 Student accounts are **global** (not per-lab) — once a student logs in anywhere, their password is set globally and reused across all labs. The first login uses a deterministic default password (`default_password(roll_no)` = roll number reversed + "@Cp"); the student must then create their own password.
 
-There are three ways to manage student accounts:
+There are two ways to manage student accounts — no pre-generation step is needed for either, since no admin action creates an account (see [LIVE_LAB_DESIGN.md §21](LIVE_LAB_DESIGN.md)):
 
-**Option 1: Auto-generate with random passwords (recommended for first-time setup)**
-
-```bash
-# Create a roster of students (roll numbers, one per line)
-cat > roster.txt <<EOF
-112201001
-112201002
-112201003
-EOF
-
-# Generate accounts + passwords for this lab (creates live/accounts.csv if it doesn't exist)
-python -m grader.manage_accounts generate \
-  --lab lab_01 \
-  --roster roster.txt
-
-# Passwords are printed — share with students (shown once, never recoverable)
-# This creates live/accounts.csv (global, shared across all labs)
-```
-
-**Option 2: Let students use the default password on first login**
+**Option 1: Let students use the default password on first login (recommended for first-time setup)**
 
 ```bash
 # No pre-generation needed. Students log in with:
@@ -526,7 +509,7 @@ python -m grader.manage_accounts generate \
 # On first login, they're prompted to create their own password.
 ```
 
-**Option 3: Manually reset/set a password**
+**Option 2: Manually reset/set a password**
 
 ```bash
 # Set a specific password for a student (prompts for password, or use --password to script)
@@ -553,7 +536,7 @@ live/
 
 **Student name mapping (optional):**
 
-To show student names in the admin dashboard (instead of just roll numbers), create a CSV:
+To show student names (instead of just roll numbers) in both the admin dashboard and the student's own header/leaderboard, create a CSV:
 
 ```bash
 # Format: roll_no,name,ip (ip is optional, auto-filled at login)
@@ -568,7 +551,9 @@ EOF
 echo "STUDENT_NAMES_CSV=student_names.csv" >> .env
 ```
 
-Then start the servers — the admin dashboard will show names alongside roll numbers.
+Then start the servers — the admin dashboard and student UI will both show names alongside roll numbers.
+
+This same CSV doubles as an optional login roster: the Accounts tab's "Only allow login for roll numbers in the student-names CSV" checkbox, once turned on, rejects any login attempt for a roll number not listed here (a plain `roll_no`-only column is enough — `name`/`ip` aren't required for this purpose).
 
 ### Running a live lab session
 
@@ -587,13 +572,14 @@ python -m server_admin.app --port 5002
 **3. Instructor controls the session:**
 
 - **Session tab**: Click "Start session", enter duration (e.g., 60 minutes) → timer starts counting down on all student screens.
-- **Accounts tab**: See all students, their login/device status, and can reset passwords, sign out devices, or **lock** a student mid-session (disables save/run for that student until unlocked).
+- **Accounts tab**: See all students, their login/device status, and can reset passwords, sign out devices, or **lock** a student mid-session (disables save/run for that student until unlocked). Select multiple students via the checkbox column to sign them all out or lock/unlock them in bulk — the bulk lock/unlock button only activates when the whole selection is uniformly locked or unlocked (a mixed selection is disabled, not partially applied). A checkbox here can also restrict login to only the roll numbers listed in the student-names CSV (see below) — off by default, and the UI refuses to enable it if no such CSV is loaded, since that would lock out every student.
 - **Live status tab**: Watch per-student, per-question progress (who's online, last run timestamp, open-test pass count).
 - **Finalize & Grade**: Once timer expires or you manually lock the session, this button becomes enabled. Click it to run the batch grader against all saved code, produce `summary.csv` + `report_*.md` + leaderboard → published back to students.
 
 **4. Students log in** at `http://<lab-pc-ip>:5001/login` with their roll number + the password they were given.
 
 - Editor loads, question list on left, code in center, results below.
+- If `questions/<lab_id>/<lab_id>_qp.pdf` exists, a "Question paper" button lets students download the full question paper PDF while the session is running, and again once it's finalized (so they can keep referring to it alongside their report/leaderboard). It's hidden before the session starts, while merely locked (mid-grading, not yet finalized), or if the admin turns it off (Accounts tab).
 - Click "Run" to compile and test against open tests only (hidden tests stay hidden).
 - Code autosaves every ~60s, plus on tab-close or switch.
 - A 5-minute warning appears when time is running low.
@@ -611,6 +597,8 @@ python -m server_admin.app --port 5002
 | **Per-student lock** | Instructor can lock a disruptive student mid-session without affecting others — they can still view code and results, just can't modify/run. |
 | **Live dashboard** | Instructor sees who's online, how far each student has progressed, and can spot patterns (e.g., many students stuck on the same question). |
 | **One-command finalize** | Session ends → instructor clicks "Finalize" → batch grader runs, reports generated, leaderboard published — all reusing the exact offline grading pipeline, so marks are always consistent. |
+| **Question paper download** | Students can download the full question paper PDF while the session is live (auth-gated, not a static file) — toggleable by the admin, and automatically hidden before start / after lock / after finalize. |
+| **Roster-restricted login** | Optionally limit login to only the roll numbers in the student-names CSV — off by default, one checkbox on the Accounts tab, blocks new logins only (doesn't retroactively kick out anyone already signed in). |
 
 ### Files created at runtime
 
@@ -618,7 +606,10 @@ python -m server_admin.app --port 5002
 live/lab_01/
 ├── students.csv                # Generated by manage_accounts; updated by server_student on login/lock/unlock
 ├── session.json                # Created when session starts; status/timer state updated by server_admin
-└── display_config.json         # Toggles (show_workspace_after_session, show_report, show_leaderboard) — runtime-editable by admin
+└── display_config.json         # Toggles (show_workspace_after_session, show_report, show_leaderboard, show_question_paper) — runtime-editable by admin
+
+questions/lab_01/
+└── lab_01_qp.pdf                # Optional — full question paper PDF, downloadable by students only while the session is live
 
 submissions/lab_01/
 ├── 112201001/

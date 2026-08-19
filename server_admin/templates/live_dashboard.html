@@ -45,6 +45,11 @@
         </div>
         <p id="session-msg" class="msg"></p>
 
+        <h3>While the session is live, students can...</h3>
+        <div class="form-row">
+          <label class="checkbox-label"><input type="checkbox" id="cfg-question-paper" checked> Download the question paper PDF</label>
+        </div>
+
         <h3>After the session ends, students can see...</h3>
         <p class="hint">Takes effect for every student within one heartbeat poll (no restart needed) -- unchecking one immediately hides and blocks that content, checking it again makes it reachable within the same window.</p>
         <div class="form-row">
@@ -69,8 +74,20 @@
           followed by <code>@Cp</code>) creates their account automatically, and they're asked to
           choose their own password right after. This list fills in as students actually sign in.
         </p>
+        <div class="form-row">
+          <label class="checkbox-label"><input type="checkbox" id="cfg-restrict-roster"> Only allow login for roll numbers in the student-names CSV</label>
+        </div>
+        <p id="restrict-roster-msg" class="msg"></p>
+        <div id="accounts-bulk-toolbar" class="form-row" hidden>
+          <span id="accounts-bulk-count" class="hint"></span>
+          <button type="button" id="bulk-unbind-btn">Sign out device</button>
+          <button type="button" id="bulk-lock-toggle-btn">Lock</button>
+        </div>
         <table id="accounts-table" class="admin-table">
-          <thead><tr><th>Roll no.</th><th>Name</th><th>Password</th><th>Device</th><th>Last seen</th><th>Locked</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th><input type="checkbox" id="accounts-select-all"></th>
+            <th>Roll no.</th><th>Name</th><th>Password</th><th>Device</th><th>Last seen</th><th>Locked</th><th>Actions</th>
+          </tr></thead>
           <tbody></tbody>
         </table>
       </section>

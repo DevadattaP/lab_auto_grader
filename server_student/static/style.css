@@ -87,6 +87,10 @@ button.secondary {
   cursor: pointer;
   font-size: 13px;
 }
+button.secondary.good {
+  background: var(--good);
+  border-color: var(--good);
+}
 
 .banner {
   background: #fef3c7;

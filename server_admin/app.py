@@ -262,6 +262,13 @@ def api_get_display_config(lab_id: str):
             "show_workspace_after_session": cfg.show_workspace_after_session,
             "show_report": cfg.show_report,
             "show_leaderboard": cfg.show_leaderboard,
+            "show_question_paper": cfg.show_question_paper,
+            "restrict_login_to_roster": cfg.restrict_login_to_roster,
+            # Lets the admin UI warn before turning restrict_login_to_roster
+            # on with no roster loaded, which would lock every student out
+            # (server_admin's own --student-names-csv / $STUDENT_NAMES_CSV /
+            # live/student_names.csv -- same file server_student loads).
+            "roster_size": len(STUDENT_MAPPING.entries),
         }
     )
 
@@ -270,7 +277,13 @@ def api_get_display_config(lab_id: str):
 def api_set_display_config(lab_id: str):
     data = request.get_json(silent=True) or {}
     overrides = {}
-    for key in ("show_workspace_after_session", "show_report", "show_leaderboard"):
+    for key in (
+        "show_workspace_after_session",
+        "show_report",
+        "show_leaderboard",
+        "show_question_paper",
+        "restrict_login_to_roster",
+    ):
         if key in data:
             overrides[key] = bool(data[key])
     if not overrides:
@@ -284,6 +297,8 @@ def api_set_display_config(lab_id: str):
             "show_workspace_after_session": cfg.show_workspace_after_session,
             "show_report": cfg.show_report,
             "show_leaderboard": cfg.show_leaderboard,
+            "show_question_paper": cfg.show_question_paper,
+            "restrict_login_to_roster": cfg.restrict_login_to_roster,
         }
     )
 

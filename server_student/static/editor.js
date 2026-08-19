@@ -17,6 +17,7 @@
   const saveStatusEl = document.getElementById("save-status");
   const resultsPanelEl = document.getElementById("results-panel");
   const logoutBtn = document.getElementById("logout-btn");
+  const questionPaperBtn = document.getElementById("question-paper-btn");
   const postSessionNavEl = document.getElementById("post-session-nav");
 
   let heartbeatIntervalSeconds = 60;
@@ -454,6 +455,12 @@
     await refreshQuestions();
   });
 
+  questionPaperBtn.addEventListener("click", () => {
+    // Session cookie rides along automatically -- the browser handles the
+    // download/inline-view itself, no need to route this through api().
+    window.open("/api/question-paper", "_blank");
+  });
+
   logoutBtn.addEventListener("click", async () => {
     if (currentQid && dirty) await doSave();
     await api("/api/logout", { method: "POST" });
@@ -551,6 +558,7 @@
     const { ok, data } = await api("/api/session/status");
     if (!ok) return;
     sessionStatus = data.status;
+    questionPaperBtn.hidden = !data.question_paper_available;
 
     const newLockedStatus = data.student_locked || false;
     if (newLockedStatus && !studentLocked && !studentLockAlertShown) {
