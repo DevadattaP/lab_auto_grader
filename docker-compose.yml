@@ -24,9 +24,30 @@ services:
       --host 0.0.0.0
       --port 5001
       --sandbox subprocess
-      --sandbox-slots 4
+      --sandbox-slots 8
+    # Each slot is one concurrently-running gcc compile or student binary --
+    # under `subprocess` sandboxing this is CPU-bound, not memory-bound
+    # (32GB+ lab PCs have far more RAM than 35 students' compiles ever
+    # need at once). Benchmarked with docker/slots_bench.py: throughput
+    # scales close to linearly up to roughly the physical core count, then
+    # plateaus (more slots than cores just means more compiles competing
+    # for the same CPUs, each taking longer, not more finishing per
+    # second). 8 matches typical lab-PC i7 core/thread counts -- re-run the
+    # benchmark on a different machine and adjust if its core count differs
+    # meaningfully.
+    # Bound to all interfaces (0.0.0.0), not just localhost -- this is the
+    # one port the other 35 lab PCs need to reach.
     ports:
       - "5001:5001"
+    # Defense in depth alongside grader/sandbox.py's own fix (run() drops
+    # a compiled student binary to `nobody` before exec, specifically so
+    # RLIMIT_NPROC -- which exempts root -- actually applies; confirmed a
+    # fork-bomb run as root, even with pids_limit alone, saturates this
+    # cgroup's pids.current and never recovers, wedging the whole container
+    # until restarted). pids_limit is the backstop if that ever doesn't
+    # apply (e.g. a future code path that doesn't drop privileges). Well
+    # above what --sandbox-slots 4 concurrent compiles/runs ever need.
+    pids_limit: 512
     volumes:
       - ./questions:/app/questions
       - ./submissions:/app/submissions
@@ -47,8 +68,16 @@ services:
       --host 0.0.0.0
       --port 5002
       --sandbox subprocess
+    # 127.0.0.1: prefix binds this port to the lab PC's own loopback only --
+    # not reachable from the LAN/other lab PCs at all, regardless of
+    # firewall rules. Admin must be accessed at http://localhost:5002 (or
+    # via SSH port-forward) from the lab PC itself.
     ports:
-      - "5002:5002"
+      - "127.0.0.1:5002:5002"
+    # Same reasoning as `student` -- Finalize shells out to grader.grade,
+    # which hits the identical fork-bomb-under-root path if a submission
+    # being (re-)graded contains one.
+    pids_limit: 512
     # Whole repo, not per-folder mounts like `student` -- this is the only
     # service that ever writes .env (init-admin / reset-admin-password), and
     # python-dotenv writes it via an atomic rename-over-existing-file. That

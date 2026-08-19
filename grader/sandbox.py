@@ -13,6 +13,7 @@ This module only answers "did it compile, and what happened when it ran".
 from __future__ import annotations
 
 import os
+import pwd
 import resource
 import shutil
 import signal
@@ -379,6 +380,31 @@ def _current_proc_count() -> int:
     return count
 
 
+def _unprivileged_run_user() -> pwd.struct_passwd | None:
+    """Resolves the user to drop to before exec'ing a *compiled student
+    binary* (run(), never compile_c() -- gcc needs the invoking user's own
+    permissions). Root is exempt from RLIMIT_NPROC entirely, so a fork-bomb
+    run as root only stops once it wins a race against this process's
+    SIGKILL -- confirmed by hand to wedge a container's whole pids cgroup
+    (every subsequent compile/run then fails with EAGAIN until something
+    restarts the container), even with a Docker-level --pids-limit already
+    in place, because a plain `while(1) fork();` can out-fork a single
+    SIGKILL sweep. Dropping to a real unprivileged UID first makes the
+    *kernel* enforce RLIMIT_NPROC atomically at the fork() syscall itself --
+    no race, nothing to sweep. `nobody` is used rather than a dedicated
+    account because it's present on every Linux distro without setup and,
+    unlike the invoking UID, reliably owns ~0 processes host-wide (the
+    baseline this whole scheme assumes, and what makes it safe to set a
+    small absolute nproc_limit without the desktop-machine offset dance
+    _current_proc_count() otherwise needs)."""
+    if os.getuid() != 0:
+        return None
+    try:
+        return pwd.getpwnam("nobody")
+    except KeyError:
+        return None
+
+
 class SubprocessRlimitSandbox(Sandbox):
     """Degraded fallback for machines where `isolate` isn't available. Still
     enforces CPU/wall time, address-space size, process count, and file size,
@@ -395,19 +421,39 @@ class SubprocessRlimitSandbox(Sandbox):
     def _run_subprocess(
         self, cmd: list[str], cwd: Path, stdin_text: str, timeout: float,
         cpu_seconds: float, mem_bytes: int, nproc: int, fsize_bytes: int,
+        drop_to: pwd.struct_passwd | None = None,
     ) -> tuple[int | None, str | None, str, str, bool]:
-        """Returns (exit_code, signal_name, stdout, stderr, timed_out)."""
+        """Returns (exit_code, signal_name, stdout, stderr, timed_out).
 
-        # RLIMIT_NPROC caps the *whole real UID's* thread count system-wide,
-        # not just this subtree -- setting it to a small absolute number
-        # starves immediately on any account that already runs other
-        # processes/threads (shell, IDE, ...). Offset by the current count,
-        # plus a safety margin for the gap between measuring it here and the
-        # fork actually happening on a busy desktop machine.
-        nproc_limit = _current_proc_count() + nproc + 32
+        `drop_to`, when set, setuid/setgid's to that user *before* applying
+        rlimits -- see _unprivileged_run_user() for why. In that case
+        RLIMIT_NPROC can be the small caller-supplied `nproc` directly: the
+        target user is expected to own ~0 processes host-wide, so there's no
+        pre-existing count to offset for."""
+
+        if drop_to is not None:
+            nproc_limit = nproc
+        else:
+            # RLIMIT_NPROC caps the *whole real UID's* thread count
+            # system-wide, not just this subtree -- setting it to a small
+            # absolute number starves immediately on any account that
+            # already runs other processes/threads (shell, IDE, ...).
+            # Offset by the current count, plus a safety margin for the gap
+            # between measuring it here and the fork actually happening on
+            # a busy desktop machine.
+            nproc_limit = _current_proc_count() + nproc + 32
 
         def _limits():
             os.setsid()
+            if drop_to is not None:
+                # Must happen before setrlimit(RLIMIT_NPROC, ...): once
+                # unprivileged, this process can no longer raise a limit it
+                # already lowered on itself, but setuid itself needs no
+                # special rlimit state, and CPU/AS/FSIZE aren't
+                # UID-dependent. Group first -- setuid drops the capability
+                # needed to change the group afterward.
+                os.setgid(drop_to.pw_gid)
+                os.setuid(drop_to.pw_uid)
             resource.setrlimit(resource.RLIMIT_CPU, (int(cpu_seconds) + 1, int(cpu_seconds) + 1))
             resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
             resource.setrlimit(resource.RLIMIT_NPROC, (nproc_limit, nproc_limit))
@@ -466,10 +512,19 @@ class SubprocessRlimitSandbox(Sandbox):
             local_binary = workdir / "a.out"
             shutil.copy(binary, local_binary)
             local_binary.chmod(0o755)
+            drop_to = _unprivileged_run_user()
+            if drop_to is not None:
+                # mkdtemp's default 0700 shuts out anyone but its owner
+                # (root, in the case this exists to handle) -- world
+                # readable+executable so `drop_to` can cwd into it and exec
+                # a.out; world-writable too, since a student program may
+                # legitimately create/write its own scratch files here.
+                workdir.chmod(0o777)
             exit_code, sig_name, stdout, stderr, timed_out = self._run_subprocess(
                 ["./a.out"], cwd=workdir, stdin_text=stdin_text, timeout=limits.wall_seconds,
                 cpu_seconds=limits.time_seconds, mem_bytes=limits.memory_mb * 1024 * 1024,
                 nproc=limits.max_processes, fsize_bytes=1024 * 1024,
+                drop_to=drop_to,
             )
             truncated = len(stdout) > limits.output_bytes
             stdout = stdout[: limits.output_bytes]
