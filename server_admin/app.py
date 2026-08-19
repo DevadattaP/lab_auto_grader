@@ -41,6 +41,7 @@ log = logging.getLogger("server_admin")
 LIVE_ROOT = REPO_ROOT / "live"
 GLOBAL_ACCOUNTS_PATH = LIVE_ROOT / accounts.GLOBAL_ACCOUNTS_FILENAME
 GRADE_PARALLEL = 4  # overridden by --grade-parallel
+GRADE_SANDBOX = "isolate"  # overridden by --sandbox
 STUDENT_MAPPING = StudentMapping()  # optional roll_no -> name, see --student-names-csv
 
 
@@ -416,7 +417,7 @@ def _run_finalize_job(lab_id: str) -> None:
         "--questions", str(q_dir),
         "--submissions", str(s_dir),
         "--out", str(r_dir),
-        "--sandbox", "isolate",
+        "--sandbox", GRADE_SANDBOX,
         "--parallel", str(GRADE_PARALLEL),
         # students.csv has roll_no + ip columns (plus password_hash/active/
         # bound_at/last_seen, which load_student_mapping just ignores) --
@@ -503,12 +504,18 @@ def live_dashboard_page(lab_id: str):
 
 
 def main() -> None:
-    global GRADE_PARALLEL, STUDENT_MAPPING
+    global GRADE_PARALLEL, GRADE_SANDBOX, STUDENT_MAPPING
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     parser = argparse.ArgumentParser(description="Admin server for lab_auto_grader's live-lab platform")
     parser.add_argument("--host", default="127.0.0.1", help="admin server should generally stay off the open LAN")
     parser.add_argument("--port", type=int, default=5002)
     parser.add_argument("--grade-parallel", type=int, default=4, help="--parallel passed to grader.grade at Finalize time")
+    parser.add_argument(
+        "--sandbox", choices=["auto", "isolate", "subprocess"], default="isolate",
+        help="--sandbox passed to grader.grade at Finalize time (default 'isolate', matching grade.py's own "
+             "default) -- set to 'subprocess' on hosts where isolate isn't usable (e.g. cgroup v1 kernels), "
+             "matching whatever server_student was started with, or 'auto' to self-test and fall back",
+    )
     parser.add_argument(
         "--student-names-csv", default=None,
         help="optional CSV (roll_no,name[,ip]) to show student names in the accounts/live-status "
@@ -526,6 +533,7 @@ def main() -> None:
     app.secret_key = secret_key
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     GRADE_PARALLEL = args.grade_parallel
+    GRADE_SANDBOX = args.sandbox
 
     student_names_csv = args.student_names_csv or os.environ.get("STUDENT_NAMES_CSV")
     if not student_names_csv:

@@ -3,6 +3,15 @@ services:
     build: .
     image: lab-auto-grader:latest
     container_name: lab-auto-grader-student
+    # Runs as root (the image default) -- NOT because it needs to, but
+    # because RLIMIT_NPROC (set by SubprocessRlimitSandbox on every compile/
+    # run, to bound fork-bombs in student code) is a Linux kernel-wide
+    # per-UID limit that only exempts UID 0. A non-root container UID gets
+    # charged against that UID's *entire host* process count, which on a
+    # busy host can already exceed whatever budget the sandbox computes,
+    # causing spurious "Resource temporarily unavailable" compile failures.
+    # Tradeoff: files this container writes into live/, runs/, submissions/
+    # come out root-owned on the host -- see `fix-ownership` in DOCKER.md.
     # No isolate in this image -- it needs a cgroup v2 host kernel, which
     # this container can't provide on its own if the host (e.g. Oracle
     # Linux 8) boots into cgroup v1. --sandbox subprocess uses the grader's
@@ -30,16 +39,21 @@ services:
     build: .
     image: lab-auto-grader:latest
     container_name: lab-auto-grader-admin
+    # Also root, same reason as `student` above -- Finalize runs
+    # grader.grade as a subprocess, which hits the same RLIMIT_NPROC problem
+    # under the subprocess sandbox backend if this container is non-root.
     command: >
       python -m server_admin.app
       --host 0.0.0.0
       --port 5002
+      --sandbox subprocess
     ports:
       - "5002:5002"
+    # Whole repo, not per-folder mounts like `student` -- this is the only
+    # service that ever writes .env (init-admin / reset-admin-password), and
+    # python-dotenv writes it via an atomic rename-over-existing-file. That
+    # rename fails with "device or resource busy" if .env is bind-mounted as
+    # a single file (a directory-level mount doesn't have that problem).
     volumes:
-      - ./questions:/app/questions
-      - ./submissions:/app/submissions
-      - ./runs:/app/runs
-      - ./live:/app/live
-      - ./.env:/app/.env
+      - .:/app
     restart: unless-stopped

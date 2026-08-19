@@ -27,6 +27,38 @@ If a future lab PC already runs cgroup v2 (check with
 back; ask for the Dockerfile changes to build it in and switch
 `docker-compose.yml` to `--sandbox auto --privileged`.
 
+Both `docker-compose.yml` services pass `--sandbox subprocess` explicitly
+(the student server's own flag, and a `--sandbox` flag added to
+`server_admin/app.py` so its "Finalize & Grade" action — which shells out to
+`grader.grade`, whose own default is `--sandbox isolate` — doesn't try
+isolate and hard-crash the grading run).
+
+## Why both containers run as root
+
+Both services keep the image's default root user, not a mapped host UID.
+That's not for convenience — `SubprocessRlimitSandbox` (the fallback in use
+here) sets `RLIMIT_NPROC` on every compile/run to bound student fork-bombs.
+That's a **Linux kernel-wide, per-UID** limit, not a per-container one, and
+the kernel only exempts UID 0 from it. A non-root container UID gets charged
+against that UID's *entire host* process count — on a real machine with
+other things running under the same UID, that count can already exceed
+whatever budget the sandbox computes, causing spurious
+`cc1: posix_spawn: Resource temporarily unavailable` compile failures that
+have nothing to do with the student's code. Root sidesteps this entirely.
+
+The tradeoff: files these containers write into the bind-mounted
+`questions/`, `submissions/`, `runs/`, `live/`, and `.env` come out
+**root-owned** on the host. If that gets in the way of editing them as
+yourself later:
+
+```bash
+sudo chown -R $(id -u):$(id -g) questions submissions runs live .env
+```
+
+(or, without `sudo` on the host, run it via a throwaway container that has
+root inside, same trick used to reach these files in the first place:
+`docker run --rm -v "$PWD":/fix -w /fix lab-auto-grader:latest chown -R $(id -u):$(id -g) questions submissions runs live .env`)
+
 ## One-time setup on the lab PC
 
 1. Install Docker Engine + Compose plugin (Oracle Linux 8):
@@ -41,14 +73,27 @@ back; ask for the Dockerfile changes to build it in and switch
 2. Copy this repo to the lab PC (or `git clone` it).
 
 3. Bootstrap the `.env` file (admin username/password + session secrets) —
-   skip this if `.env` already exists (e.g. copied from another machine):
+   skip the `touch` if `.env` already exists (e.g. copied from another
+   machine):
    ```bash
    cd lab_auto_grader
+   touch .env
    docker compose build
    docker compose run --rm admin python -m grader.manage_accounts init-admin
    ```
-   This prompts for an admin username/password and writes `.env` into the
-   project directory (bind-mounted into both containers).
+   The `touch` matters: `docker-compose.yml` bind-mounts `.env` into both
+   containers, and if the file doesn't exist on the host yet, Docker creates
+   the mount point as a **directory** instead — the container then fails
+   with `IsADirectoryError: [Errno 21] Is a directory: '/app/.env'` the
+   moment it tries to read it. `touch .env` first avoids that entirely.
+
+   If you hit that error anyway (e.g. ran `docker compose up`/`run` before
+   creating the file): `docker compose down`, then `rmdir .env` to remove
+   the directory Docker created, then `touch .env` and retry.
+
+   `init-admin` prompts for an admin username/password and writes the real
+   `.env` contents into that file (bind-mounted into both containers, so no
+   rebuild needed afterward).
 
 4. Make sure `questions/lab_01/` (or whichever lab) has real question
    content — it's bind-mounted from the host, so edit it directly on the

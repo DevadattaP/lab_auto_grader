@@ -20,6 +20,11 @@ COPY . .
 RUN mkdir -p questions submissions runs live
 
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+# a+rx, not just u+x: the compose file runs containers as the host user's
+# UID (see `user:` in docker-compose.yml), not root, so world-readable is
+# what actually makes this script (and /app generally) usable by whichever
+# UID the host maps in.
+RUN chmod a+rx /usr/local/bin/entrypoint.sh \
+    && chmod -R a+rX /app
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
