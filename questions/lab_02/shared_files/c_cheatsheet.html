@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C Programming Cheat Sheet</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Patrick+Hand&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #fdf6e3;
+    font-family: 'Caveat', cursive;
+    font-size: 13px;
+    color: #2d2d2d;
+    min-height: 100vh;
+    padding: 10px;
+  }
+
+  .page {
+    width: 900px;
+    margin: 0 auto;
+    background: #fffdf5;
+    border: 2px solid #c8b89a;
+    border-radius: 6px;
+    padding: 12px 16px;
+    box-shadow: 3px 3px 12px rgba(0,0,0,0.15);
+    /* Ruled lines */
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent,
+      transparent 23px,
+      #e8dfc8 23px,
+      #e8dfc8 24px
+    );
+    background-attachment: local;
+  }
+
+  h1 {
+    font-family: 'Caveat', cursive;
+    font-size: 26px;
+    font-weight: 700;
+    color: #8b2500;
+    text-align: center;
+    margin-bottom: 6px;
+    text-decoration: underline wavy #c8552a;
+    letter-spacing: 1px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .col2 { grid-template-columns: 1fr 1fr; }
+
+  .box {
+    background: rgba(255,255,255,0.6);
+    border: 1.5px solid #b8a88a;
+    border-radius: 5px;
+    padding: 6px 8px;
+    position: relative;
+  }
+
+  .box.yellow { background: rgba(255,253,180,0.7); border-color: #d4b800; }
+  .box.blue   { background: rgba(210,235,255,0.7); border-color: #6aabdc; }
+  .box.green  { background: rgba(210,255,220,0.7); border-color: #5abf7a; }
+  .box.pink   { background: rgba(255,220,220,0.7); border-color: #d47a7a; }
+  .box.purple { background: rgba(235,215,255,0.7); border-color: #9a70c8; }
+  .box.orange { background: rgba(255,235,210,0.7); border-color: #d48b4a; }
+
+  .section-title {
+    font-family: 'Caveat', cursive;
+    font-size: 15px;
+    font-weight: 700;
+    color: #8b2500;
+    border-bottom: 2px solid #c8552a;
+    margin-bottom: 4px;
+    padding-bottom: 1px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .section-title .num {
+    background: #8b2500;
+    color: white;
+    border-radius: 50%;
+    width: 18px; height: 18px;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  pre, code {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    background: rgba(0,0,0,0.05);
+    border-radius: 3px;
+    padding: 1px 3px;
+    white-space: pre-wrap;
+  }
+
+  pre {
+    display: block;
+    padding: 4px 6px;
+    margin: 3px 0;
+    border-left: 3px solid #8b2500;
+    line-height: 1.45;
+  }
+
+  .kw  { color: #0000cc; font-weight: bold; }
+  .fn  { color: #007700; }
+  .cm  { color: #888; font-style: italic; }
+  .str { color: #aa2200; }
+  .num-c{ color: #aa6600; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    margin-top: 3px;
+  }
+  th {
+    background: rgba(139,37,0,0.12);
+    padding: 2px 4px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 11px;
+    border-bottom: 1px solid #c8b89a;
+  }
+  td {
+    padding: 1px 4px;
+    border-bottom: 1px solid #e8dfc8;
+    vertical-align: top;
+  }
+  code.h { color: #007700; font-size: 10px; }
+  code.f { color: #0000cc; font-size: 10px; }
+
+  .note {
+    font-size: 11px;
+    color: #8b2500;
+    margin-top: 2px;
+    font-style: italic;
+  }
+
+  .arrow { color: #8b2500; font-weight: bold; }
+  .span2 { grid-column: span 2; }
+  .span3 { grid-column: span 3; }
+
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    margin: 3px 0;
+  }
+  .flow-box {
+    background: #fff;
+    border: 1.5px solid #8b2500;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .tag {
+    display: inline-block;
+    background: #8b2500;
+    color: white;
+    border-radius: 10px;
+    padding: 0px 6px;
+    font-size: 10px;
+    margin-right: 3px;
+    font-weight: 600;
+  }
+
+  ul { padding-left: 14px; }
+  li { font-size: 12px; margin-bottom: 1px; }
+
+  .divider {
+    border: none;
+    border-top: 1.5px dashed #c8b89a;
+    margin: 4px 0;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>✏️ C Programming — Beginner Cheat Sheet</h1>
+
+  <div class="grid">
+
+    <!-- ① if / if-else -->
+    <div class="box yellow">
+      <div class="section-title"><span class="num">1</span> if / if-else / ladder</div>
+<pre><span class="kw">if</span> (condition) { ... }
+<span class="kw">else if</span> (condition) { ... }
+<span class="kw">else</span> { ... }</pre>
+<pre><span class="kw">if</span> (marks &gt;= 90) grade=<span class="str">'A'</span>;
+<span class="kw">else if</span> (marks &gt;= 80) grade=<span class="str">'B'</span>;
+<span class="kw">else</span> grade=<span class="str">'C'</span>;</pre>
+      <p class="note">⚠ <code>==</code> compare &nbsp;|&nbsp; <code>=</code> assign</p>
+    </div>
+
+    <!-- ② Loops -->
+    <div class="box blue">
+      <div class="section-title"><span class="num">2</span> Loops</div>
+<pre><span class="cm">/* while */</span>
+<span class="kw">while</span> (i &lt;= 5) { printf(<span class="str">"%d"</span>,i); i++; }
+
+<span class="cm">/* do-while — runs at least once */</span>
+<span class="kw">do</span> { scanf(<span class="str">"%d"</span>,&amp;n); } <span class="kw">while</span> (n&lt;1);
+
+<span class="cm">/* for */</span>
+<span class="kw">for</span> (i=0; i&lt;5; i++) { ... }</pre>
+      <div class="flow">
+        <div class="flow-box">init</div><span class="arrow">→</span>
+        <div class="flow-box">check?</div><span class="arrow">→</span>
+        <div class="flow-box">body</div><span class="arrow">→</span>
+        <div class="flow-box">update</div><span class="arrow">↩</span>
+      </div>
+    </div>
+
+    <!-- ③ switch -->
+    <div class="box green">
+      <div class="section-title"><span class="num">3</span> switch-case</div>
+<pre><span class="kw">switch</span> (ch) {
+  <span class="kw">case</span> <span class="str">'A'</span>:
+    printf(<span class="str">"Add"</span>);
+    <span class="kw">break</span>;        <span class="cm">// ← must!</span>
+  <span class="kw">case</span> <span class="str">'D'</span>:
+    printf(<span class="str">"Del"</span>);
+    <span class="kw">break</span>;
+  <span class="kw">default</span>:
+    printf(<span class="str">"?"</span>);
+}</pre>
+      <p class="note">⚠ No <code>break</code> → fall-through!</p>
+    </div>
+
+    <!-- ④ Functions overview -->
+    <div class="box pink span2">
+      <div class="section-title"><span class="num">4</span> Functions — 4 Styles</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <div>
+          <span class="tag">Type 1</span> <b>No arg, No return</b>
+<pre><span class="kw">void</span> <span class="fn">greet</span>(<span class="kw">void</span>) {
+  printf(<span class="str">"Hi!"</span>);
+}
+<span class="fn">greet</span>();     <span class="cm">// call</span></pre>
+          <span class="tag">Type 2</span> <b>With arg, No return</b>
+<pre><span class="kw">void</span> <span class="fn">printSq</span>(<span class="kw">int</span> n) {
+  printf(<span class="str">"%d"</span>, n*n);
+}
+<span class="fn">printSq</span>(<span class="num-c">5</span>);</pre>
+        </div>
+        <div>
+          <span class="tag">Type 3</span> <b>No arg, Returns value</b>
+<pre><span class="kw">int</span> <span class="fn">getNum</span>(<span class="kw">void</span>) {
+  <span class="kw">return</span> <span class="num-c">10</span>;
+}
+<span class="kw">int</span> x = <span class="fn">getNum</span>();</pre>
+          <span class="tag">Type 4</span> <b>With arg + return</b>
+<pre><span class="kw">int</span> <span class="fn">add</span>(<span class="kw">int</span> a, <span class="kw">int</span> b) {
+  <span class="kw">return</span> a+b;
+}
+<span class="kw">int</span> z = <span class="fn">add</span>(<span class="num-c">3</span>,<span class="num-c">4</span>);</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑤ Declare / Define / Call -->
+    <div class="box purple">
+      <div class="section-title"><span class="num">5</span> Declare → Call → Define</div>
+<pre><span class="cm">// DECLARATION (before main)</span>
+<span class="kw">int</span> <span class="fn">add</span>(<span class="kw">int</span>, <span class="kw">int</span>);
+
+<span class="kw">int</span> <span class="fn">main</span>() {
+  <span class="cm">// CALL / INVOKE</span>
+  <span class="kw">int</span> r = <span class="fn">add</span>(<span class="num-c">10</span>,<span class="num-c">20</span>);
+}
+
+<span class="cm">// DEFINITION (after main)</span>
+<span class="kw">int</span> <span class="fn">add</span>(<span class="kw">int</span> a, <span class="kw">int</span> b){
+  <span class="kw">return</span> a+b;
+}</pre>
+      <div class="flow" style="font-size:11px;">
+        <div class="flow-box">main() calls add()</div>
+        <span class="arrow">→</span>
+        <div class="flow-box">add() runs</div>
+        <span class="arrow">→</span>
+        <div class="flow-box">return → main()</div>
+      </div>
+    </div>
+
+    <!-- ⑥ Operator Precedence -->
+    <div class="box orange">
+      <div class="section-title"><span class="num">6</span> Operator Precedence</div>
+      <table>
+        <tr><th>Higher ↑</th><th>Operator</th></tr>
+        <tr><td>1</td><td><code>() [] .</code> — call, index</td></tr>
+        <tr><td>2</td><td><code>! ++ --</code> — unary</td></tr>
+        <tr><td>3</td><td><code>* / %</code> — mult</td></tr>
+        <tr><td>4</td><td><code>+ -</code> — add</td></tr>
+        <tr><td>5</td><td><code>&lt; &lt;= &gt; &gt;=</code> — relational</td></tr>
+        <tr><td>6</td><td><code>== !=</code> — equality</td></tr>
+        <tr><td>7</td><td><code>&amp;&amp;  ||</code> — logical</td></tr>
+        <tr><td>8 ↓</td><td><code>= += -= *=</code> — assign</td></tr>
+      </table>
+<pre>x = <span class="num-c">2</span> + <span class="num-c">3</span> * <span class="num-c">4</span>;  <span class="cm">// = 14 (not 20)</span>
+x = (<span class="num-c">2</span>+<span class="num-c">3</span>) * <span class="num-c">4</span>; <span class="cm">// = 20  ← use ()</span></pre>
+    </div>
+
+    <!-- ⑦ Library Functions -->
+    <div class="box blue span2">
+      <div class="section-title"><span class="num">7</span> Common Library Functions</div>
+      <table>
+        <tr>
+          <th>Function</th><th>Header</th><th>What it does</th>
+          <th>Function</th><th>Header</th><th>What it does</th>
+        </tr>
+        <tr>
+          <td><code class="f">printf()</code></td><td><code class="h">stdio.h</code></td><td>print output</td>
+          <td><code class="f">strlen()</code></td><td><code class="h">string.h</code></td><td>string length</td>
+        </tr>
+        <tr>
+          <td><code class="f">scanf()</code></td><td><code class="h">stdio.h</code></td><td>read input</td>
+          <td><code class="f">strcpy()</code></td><td><code class="h">string.h</code></td><td>copy string</td>
+        </tr>
+        <tr>
+          <td><code class="f">sqrt()</code></td><td><code class="h">math.h</code></td><td>square root</td>
+          <td><code class="f">strcmp()</code></td><td><code class="h">string.h</code></td><td>compare strings</td>
+        </tr>
+        <tr>
+          <td><code class="f">pow()</code></td><td><code class="h">math.h</code></td><td>x to power y</td>
+          <td><code class="f">islower()</code></td><td><code class="h">ctype.h</code></td><td>is lowercase?</td>
+        </tr>
+        <tr>
+          <td><code class="f">abs()</code></td><td><code class="h">stdlib.h</code></td><td>absolute value</td>
+          <td><code class="f">isupper()</code></td><td><code class="h">ctype.h</code></td><td>is uppercase?</td>
+        </tr>
+        <tr>
+          <td><code class="f">atoi()</code></td><td><code class="h">stdlib.h</code></td><td>string→int</td>
+          <td><code class="f">isalpha()</code></td><td><code class="h">ctype.h</code></td><td>is alphabet?</td>
+        </tr>
+        <tr>
+          <td><code class="f">sprintf()</code></td><td><code class="h">stdio.h</code></td><td>int→string</td>
+          <td><code class="f">isdigit()</code></td><td><code class="h">ctype.h</code></td><td>is digit?</td>
+        </tr>
+      </table>
+<pre style="margin-top:4px;"><span class="kw">#include</span> <span class="str">&lt;math.h&gt;</span>   double r = <span class="fn">sqrt</span>(<span class="num-c">25.0</span>);
+<span class="kw">#include</span> <span class="str">&lt;stdlib.h&gt;</span> <span class="kw">int</span> n   = <span class="fn">atoi</span>(<span class="str">"123"</span>);
+<span class="kw">#include</span> <span class="str">&lt;ctype.h&gt;</span>  <span class="kw">if</span> (<span class="fn">islower</span>(ch)) printf(<span class="str">"lowercase"</span>);</pre>
+    </div>
+
+    <!-- ⑧ man command -->
+    <div class="box green">
+      <div class="section-title"><span class="num">8</span> man command</div>
+<pre><span class="cm"># Get prototype of any fn:</span>
+$ man <span class="num-c">3</span> sqrt
+$ man <span class="num-c">3</span> atoi
+$ man <span class="num-c">3</span> islower
+
+<span class="cm"># SYNOPSIS section shows:</span>
+<span class="kw">#include</span> <span class="str">&lt;math.h&gt;</span>
+double <span class="fn">sqrt</span>(double x);
+
+<span class="cm"># search related entries:</span>
+$ man -k sqrt</pre>
+      <p class="note">📖 Always check SYNOPSIS for header + prototype</p>
+    </div>
+
+    <!-- ⑨ Compile + Checklist -->
+    <div class="box pink span3">
+      <div class="section-title"><span class="num">9</span> Compile &amp; Quick Checklist</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div>
+<pre>gcc program.c -o program
+./program
+
+<span class="cm"># with warnings (recommended):</span>
+gcc -Wall -Wextra program.c -o prog</pre>
+        </div>
+        <div>
+          <ul>
+            <li>✅ Included correct header file?</li>
+            <li>✅ Declared all variables?</li>
+            <li>✅ Function prototype before <code>main()</code>?</li>
+            <li>✅ Used <code>==</code> for comparison (not <code>=</code>)?</li>
+            <li>✅ All <code>{ }</code> and <code>( )</code> matched?</li>
+            <li>✅ Semicolons <code>;</code> after each statement?</li>
+            <li>✅ <code>&amp;</code> before variables in <code>scanf()</code>?</li>
+            <li>✅ <code>break</code> in each <code>switch</code> case?</li>
+            <li>✅ Every non-void function returns a value?</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end grid -->
+</div><!-- end page -->
+</body>
+</html>

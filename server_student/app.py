@@ -151,24 +151,36 @@ def _get_student_locked_status(roll_no: str) -> bool:
     return account is not None and account.locked
 
 
-def _question_paper_path() -> Path:
-    return QUESTIONS_DIR / f"{LAB_ID}_qp.pdf"
+def _shared_files_dir() -> Path:
+    # A fixed, dedicated folder -- deliberately never the rest of
+    # QUESTIONS_DIR (which holds gold solutions and hidden test cases) so
+    # this can never accidentally expose grading material. The admin drops
+    # whatever files they want students to have (question paper PDF,
+    # datasets, images, etc.) directly in here; nothing recurses into
+    # subfolders, so there's no path-traversal surface to worry about.
+    return QUESTIONS_DIR / "shared_files"
 
 
-def _question_paper_available(state) -> bool:
+def _list_shared_files() -> list[str]:
+    directory = _shared_files_dir()
+    if not directory.is_dir():
+        return []
+    return sorted(p.name for p in directory.iterdir() if p.is_file())
+
+
+def _shared_files_available(state) -> bool:
     """Deliberately different from _workspace_gate_error: reachable while
     the session is actually running, and again once finalized (per the
-    admin's explicit ask -- students should be able to revisit the paper
+    admin's explicit ask -- students should be able to revisit shared files
     alongside their published report/leaderboard), but never while merely
     locked (mid-grading, not yet finalized) or before the session has
-    started. Also gated by the admin's own show_question_paper toggle
+    started. Also gated by the admin's own show_shared_files toggle
     (grader.display_config, same runtime-editable mechanism as
-    show_workspace_after_session etc.) and by the file actually existing."""
-    return (
-        state.status in (live_session.STATUS_RUNNING, live_session.STATUS_FINALIZED)
-        and display_config.get_config(LIVE_DIR).show_question_paper
-        and _question_paper_path().is_file()
-    )
+    show_workspace_after_session etc.)."""
+    return state.status in (
+        live_session.STATUS_RUNNING,
+        live_session.STATUS_FINALIZED,
+    ) and display_config.get_config(LIVE_DIR).show_shared_files
 
 
 def _source_path(roll_no: str, question) -> Path:
@@ -319,7 +331,7 @@ def api_session_status():
     roll_no = _current_roll_no()
     state = live_session.auto_lock_if_expired(LIVE_DIR)
     locked = _get_student_locked_status(roll_no)
-    paper_available = _question_paper_available(state)
+    shared_files = _list_shared_files() if _shared_files_available(state) else []
     return jsonify(
         {
             "status": state.status,
@@ -328,7 +340,7 @@ def api_session_status():
             "time_remaining_seconds": live_session.time_remaining_seconds(LIVE_DIR),
             "finalized_run": state.finalized_run,
             "student_locked": locked,
-            "question_paper_available": paper_available,
+            "shared_files": shared_files,
         }
     )
 
@@ -425,19 +437,27 @@ def api_question_detail(qid: str):
     )
 
 
-@app.get("/api/question-paper")
-def api_question_paper():
+@app.get("/api/shared-files/<filename>")
+def api_shared_file(filename: str):
     # Same auth as every other student endpoint -- this is not a static
     # asset (nothing under server_student/static/ is auth-gated), so a
-    # student must have a live, current session to fetch it, and the file
-    # itself lives under questions/<lab_id>/ rather than server_student's
-    # own static folder to keep it scoped to this process's one lab.
+    # student must have a live, current session to fetch anything here.
     _current_roll_no()
     state = live_session.auto_lock_if_expired(LIVE_DIR)
-    if not _question_paper_available(state):
-        abort(403, "The question paper is not available right now.")
-    pdf_path = _question_paper_path()
-    return send_file(pdf_path, mimetype="application/pdf", as_attachment=False, download_name=f"{LAB_ID}_question_paper.pdf")
+    if not _shared_files_available(state):
+        abort(403, "Shared files are not available right now.")
+    # filename must be an exact, direct child of _shared_files_dir() --
+    # reject anything containing a path separator (covers "..", absolute
+    # paths, and any attempt to escape into the rest of questions/<lab_id>/,
+    # which holds gold solutions and hidden test cases). Flask's own <path
+    # converter already wouldn't be used here (default <string> converter
+    # rejects "/" in the segment), but checking explicitly rather than
+    # relying on that alone, and re-validating against the actual listing
+    # rather than just "no slashes", so a filename can't be guessed/probed
+    # for files that were never intentionally shared.
+    if filename not in _list_shared_files():
+        abort(404, "No such shared file for this lab.")
+    return send_file(_shared_files_dir() / filename, as_attachment=False, download_name=filename)
 
 
 # --------------------------------------------------------------------------

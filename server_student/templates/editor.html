@@ -14,7 +14,10 @@
       <div class="brand">Lab <strong>{{ lab_id }}</strong></div>
       <div class="who">{% if student_name %}<strong>{{ student_name }}</strong> ({{ roll_no }}){% else %}Roll no. <strong>{{ roll_no }}</strong>{% endif %}</div>
       <div class="timer" id="timer">--:--</div>
-      <button id="question-paper-btn" class="secondary good" hidden>Question paper</button>
+      <details id="shared-files-menu" class="shared-files-menu" hidden>
+        <summary class="secondary good">Shared files</summary>
+        <ul id="shared-files-list"></ul>
+      </details>
       <button id="logout-btn" class="secondary">Sign out</button>
     </header>
 

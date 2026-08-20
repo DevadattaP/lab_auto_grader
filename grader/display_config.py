@@ -1,11 +1,11 @@
 """Per-lab, runtime-editable toggles controlling what's visible to, and who
 can log in as, students: three for what stays visible once a session is
 finalized (workspace browsing -- questions/saved code/last run results --,
-the per-student report, and the leaderboard), one for whether the
-question-paper PDF can be downloaded while the session is live, and one
-login-policy toggle (restrict_login_to_roster) restricting new logins to
-roll numbers present in the student-name-mapping CSV (see
-grader.discover.load_student_mapping / --student-names-csv). Each
+the per-student report, and the leaderboard), one for whether files dropped
+in questions/<lab_id>/shared_files/ can be downloaded while the session is
+live/finalized, and one login-policy toggle (restrict_login_to_roster)
+restricting new logins to roll numbers present in the student-name-mapping
+CSV (see grader.discover.load_student_mapping / --student-names-csv). Each
 independently on/off.
 
 Exists because server_admin (which sets these) and server_student (which
@@ -23,7 +23,7 @@ lock-free, safe for the same reason accounts.get_account's are).
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 from filelock import FileLock
@@ -34,7 +34,7 @@ class DisplayConfig:
     show_workspace_after_session: bool = True
     show_report: bool = True
     show_leaderboard: bool = True
-    show_question_paper: bool = True
+    show_shared_files: bool = True
     # Off by default: without a roster CSV loaded, turning this on would
     # lock every student out (see server_student.api_login), so it must
     # stay an explicit admin opt-in rather than a new default.
@@ -49,11 +49,25 @@ def _lock(live_dir: Path) -> FileLock:
     return FileLock(str(_path(live_dir)) + ".lock")
 
 
+def _load(path: Path) -> DisplayConfig:
+    """Drops any on-disk key that isn't a current field (e.g.
+    `show_question_paper`, this field's name before it generalized into
+    `show_shared_files`) instead of letting an old live/<lab>/display_config.json
+    from before a field rename crash every read with a TypeError -- a
+    renamed toggle silently reverts to its new default rather than bricking
+    the lab. Distinct from set_config's own validation, which still hard-
+    errors on an unknown key in a *write* request (a typo'd flag there
+    should never silently no-op)."""
+    raw = json.loads(path.read_text())
+    known = {f.name for f in fields(DisplayConfig)}
+    return DisplayConfig(**{k: v for k, v in raw.items() if k in known})
+
+
 def get_config(live_dir: Path) -> DisplayConfig:
     path = _path(live_dir)
     if not path.exists():
         return DisplayConfig()
-    return DisplayConfig(**json.loads(path.read_text()))
+    return _load(path)
 
 
 def set_config(live_dir: Path, **overrides: bool) -> DisplayConfig:
@@ -62,7 +76,7 @@ def set_config(live_dir: Path, **overrides: bool) -> DisplayConfig:
     never silently no-op)."""
     with _lock(live_dir):
         path = _path(live_dir)
-        current = DisplayConfig(**json.loads(path.read_text())) if path.exists() else DisplayConfig()
+        current = _load(path) if path.exists() else DisplayConfig()
         for key, value in overrides.items():
             if not hasattr(current, key):
                 raise ValueError(f"unknown display config key: {key}")

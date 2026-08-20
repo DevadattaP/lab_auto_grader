@@ -135,7 +135,7 @@
   const cfgWorkspaceEl = document.getElementById("cfg-workspace");
   const cfgReportEl = document.getElementById("cfg-report");
   const cfgLeaderboardEl = document.getElementById("cfg-leaderboard");
-  const cfgQuestionPaperEl = document.getElementById("cfg-question-paper");
+  const cfgSharedFilesEl = document.getElementById("cfg-shared-files");
 
   async function loadDisplayConfig() {
     const { ok, data } = await api(`/api/live/${labId}/display-config`);
@@ -143,7 +143,7 @@
     cfgWorkspaceEl.checked = data.show_workspace_after_session;
     cfgReportEl.checked = data.show_report;
     cfgLeaderboardEl.checked = data.show_leaderboard;
-    cfgQuestionPaperEl.checked = data.show_question_paper;
+    cfgSharedFilesEl.checked = data.show_shared_files;
   }
 
   document.getElementById("save-display-config-btn").addEventListener("click", async () => {
@@ -154,7 +154,7 @@
         show_workspace_after_session: cfgWorkspaceEl.checked,
         show_report: cfgReportEl.checked,
         show_leaderboard: cfgLeaderboardEl.checked,
-        show_question_paper: cfgQuestionPaperEl.checked,
+        show_shared_files: cfgSharedFilesEl.checked,
       }),
     });
     displayConfigMsgEl.textContent = ok

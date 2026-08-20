@@ -17,7 +17,9 @@
   const saveStatusEl = document.getElementById("save-status");
   const resultsPanelEl = document.getElementById("results-panel");
   const logoutBtn = document.getElementById("logout-btn");
-  const questionPaperBtn = document.getElementById("question-paper-btn");
+  const sharedFilesMenuEl = document.getElementById("shared-files-menu");
+  const sharedFilesListEl = document.getElementById("shared-files-list");
+  let lastRenderedSharedFiles = null; // JSON of the last list actually rendered, so pollStatus() only touches the DOM (and closes an open menu) when the list actually changed
   const postSessionNavEl = document.getElementById("post-session-nav");
 
   let heartbeatIntervalSeconds = 60;
@@ -455,11 +457,31 @@
     await refreshQuestions();
   });
 
-  questionPaperBtn.addEventListener("click", () => {
-    // Session cookie rides along automatically -- the browser handles the
-    // download/inline-view itself, no need to route this through api().
-    window.open("/api/question-paper", "_blank");
-  });
+  function renderSharedFiles(files) {
+    const asJson = JSON.stringify(files);
+    if (asJson === lastRenderedSharedFiles) return;
+    lastRenderedSharedFiles = asJson;
+
+    sharedFilesMenuEl.hidden = files.length === 0;
+    if (files.length === 0) {
+      sharedFilesMenuEl.open = false; // closing an already-empty menu is a no-op, but guards the case where files disappeared while the menu was open
+      return;
+    }
+    sharedFilesListEl.innerHTML = "";
+    for (const name of files) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      // Session cookie rides along automatically -- the browser handles
+      // the download/inline-view itself, no need to route this through
+      // api(). target="_blank" so it opens/downloads without navigating
+      // away from the editor (and losing unsaved code).
+      a.href = `/api/shared-files/${encodeURIComponent(name)}`;
+      a.target = "_blank";
+      a.textContent = name;
+      li.appendChild(a);
+      sharedFilesListEl.appendChild(li);
+    }
+  }
 
   logoutBtn.addEventListener("click", async () => {
     if (currentQid && dirty) await doSave();
@@ -558,7 +580,7 @@
     const { ok, data } = await api("/api/session/status");
     if (!ok) return;
     sessionStatus = data.status;
-    questionPaperBtn.hidden = !data.question_paper_available;
+    renderSharedFiles(data.shared_files || []);
 
     const newLockedStatus = data.student_locked || false;
     if (newLockedStatus && !studentLocked && !studentLockAlertShown) {

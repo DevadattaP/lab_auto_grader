@@ -262,7 +262,7 @@ def api_get_display_config(lab_id: str):
             "show_workspace_after_session": cfg.show_workspace_after_session,
             "show_report": cfg.show_report,
             "show_leaderboard": cfg.show_leaderboard,
-            "show_question_paper": cfg.show_question_paper,
+            "show_shared_files": cfg.show_shared_files,
             "restrict_login_to_roster": cfg.restrict_login_to_roster,
             # Lets the admin UI warn before turning restrict_login_to_roster
             # on with no roster loaded, which would lock every student out
@@ -273,6 +273,19 @@ def api_get_display_config(lab_id: str):
     )
 
 
+@app.get("/api/live/<lab_id>/shared-files")
+def api_list_shared_files(lab_id: str):
+    """Read-only visibility into questions/<lab_id>/shared_files/ -- purely
+    informational (so the admin can confirm what's actually in the folder
+    without SSHing into the machine); files are dropped in/removed directly
+    on disk, there's no upload UI here."""
+    q_dir, _, _ = _lab_dirs(lab_id)
+    shared_dir = q_dir / "shared_files"
+    if not shared_dir.is_dir():
+        return jsonify({"files": []})
+    return jsonify({"files": sorted(p.name for p in shared_dir.iterdir() if p.is_file())})
+
+
 @app.post("/api/live/<lab_id>/display-config")
 def api_set_display_config(lab_id: str):
     data = request.get_json(silent=True) or {}
@@ -281,7 +294,7 @@ def api_set_display_config(lab_id: str):
         "show_workspace_after_session",
         "show_report",
         "show_leaderboard",
-        "show_question_paper",
+        "show_shared_files",
         "restrict_login_to_roster",
     ):
         if key in data:
@@ -297,7 +310,7 @@ def api_set_display_config(lab_id: str):
             "show_workspace_after_session": cfg.show_workspace_after_session,
             "show_report": cfg.show_report,
             "show_leaderboard": cfg.show_leaderboard,
-            "show_question_paper": cfg.show_question_paper,
+            "show_shared_files": cfg.show_shared_files,
             "restrict_login_to_roster": cfg.restrict_login_to_roster,
         }
     )

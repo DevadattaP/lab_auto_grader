@@ -78,7 +78,8 @@ header .timer {
   font-size: 18px;
   font-weight: 600;
 }
-button.secondary {
+button.secondary,
+summary.secondary {
   background: var(--bad);
   color: white;
   border: 1px solid var(--bad);
@@ -86,10 +87,49 @@ button.secondary {
   padding: 6px 12px;
   cursor: pointer;
   font-size: 13px;
+  list-style: none; /* summary's own default disclosure triangle/marker */
 }
-button.secondary.good {
+summary.secondary::-webkit-details-marker { display: none; }
+button.secondary.good,
+summary.secondary.good {
   background: var(--good);
   border-color: var(--good);
+}
+
+.shared-files-menu {
+  position: relative;
+}
+.shared-files-menu[open] summary {
+  border-radius: 6px 6px 0 0;
+}
+.shared-files-menu ul {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin: 2px 0 0;
+  padding: 6px;
+  min-width: 200px;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 20;
+}
+.shared-files-menu li + li {
+  margin-top: 2px;
+}
+.shared-files-menu a {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 4px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.shared-files-menu a:hover {
+  background: var(--bg);
 }
 
 .banner {
