@@ -239,6 +239,76 @@ def _recursive_function_calls(ctx: AstContext, target_name: str) -> list[int]:
     return sorted(lines)
 
 
+def _array_declared(ctx: AstContext) -> list[int]:
+    """Lines of a real array *declaration* -- int x[10]; or int x[] = {...};
+    -- via VAR_DECL's own type, never a function parameter: int f(int x[])
+    is indistinguishable from int f(int *x) once clang resolves the type
+    (array-to-pointer decay is part of the C standard itself, not a parsing
+    gap here), so parameters are deliberately excluded rather than guessed
+    at from the written syntax. Matches ARRAY_DECLARED's regex fallback's
+    intent, not its exact heuristic."""
+    cindex = ctx.cindex
+    kinds = (cindex.TypeKind.CONSTANTARRAY, cindex.TypeKind.INCOMPLETEARRAY)
+    return sorted(
+        c.location.line
+        for c in ctx.by_kind.get(cindex.CursorKind.VAR_DECL, [])
+        if c.type.kind in kinds
+    )
+
+
+# scanf("%d", &n) is the near-universal idiom for reading input in
+# beginner C -- &n there is required syntax, not a deliberate choice to
+# "use a pointer" the way int *p = &n; is, so &-args of these calls are
+# excluded from the `pointer` construct entirely (see the grader's own
+# discussion of this exact false positive: it tripped every lab_03 gold.c).
+_SCANF_FAMILY = {"scanf", "fscanf", "sscanf"}
+
+
+def _scanf_address_of_args(ctx: AstContext) -> set:
+    """Cursor objects for every UNARY_OPERATOR that is a direct argument
+    (not nested inside a sub-expression) of a scanf/fscanf/sscanf call --
+    the set `_pointer_used` excludes from its address-of match. Direct
+    argument only: `scanf("%d", &arr[compute(&x)])` (contrived, but
+    possible) still flags the inner `&x`, since that one isn't itself the
+    idiom being special-cased."""
+    cindex = ctx.cindex
+    call_kind = cindex.CursorKind.CALL_EXPR
+    unary_kind = cindex.CursorKind.UNARY_OPERATOR
+    excluded = set()
+    for c in ctx.by_kind.get(call_kind, []):
+        if c.spelling not in _SCANF_FAMILY:
+            continue
+        for arg in c.get_arguments():
+            if arg.kind == unary_kind and _operator_spelling(arg, cindex) == "&":
+                excluded.add(arg.hash)
+    return excluded
+
+
+def _pointer_used(ctx: AstContext) -> list[int]:
+    """Lines where a pointer is declared (VAR_DECL or PARM_DECL of
+    POINTER_TYPE, e.g. int *p) or used via dereference (*p) or address-of
+    (&x) -- except an address-of that's a direct scanf/fscanf/sscanf
+    argument (see _SCANF_FAMILY above). The dereference/address-of cases
+    share UNARY_OPERATOR's cursor kind with every other prefix unary
+    operator, so they're told apart the same way
+    _UNARY_OP_SPELLINGS/_BINARY_OP_SPELLINGS are: by the operator's actual
+    token spelling, not by position alone."""
+    cindex = ctx.cindex
+    lines = set()
+    for kind_name in ("VAR_DECL", "PARM_DECL"):
+        for c in ctx.by_kind.get(getattr(cindex.CursorKind, kind_name), []):
+            if c.type.kind == cindex.TypeKind.POINTER:
+                lines.add(c.location.line)
+    scanf_excluded = _scanf_address_of_args(ctx)
+    for c in ctx.by_kind.get(cindex.CursorKind.UNARY_OPERATOR, []):
+        spelling = _operator_spelling(c, cindex)
+        if spelling == "&" and c.hash in scanf_excluded:
+            continue
+        if spelling in ("*", "&"):
+            lines.add(c.location.line)
+    return sorted(lines)
+
+
 def _function_def_used(ctx: AstContext) -> list[int]:
     """AST equivalent of code_checks._find_function_def_used: BFS from
     `main` over the real call graph (a CALL_EXPR's spelling, resolved
@@ -310,6 +380,12 @@ def detect(ctx: AstContext, name: str) -> list[int]:
             for c in ctx.by_kind.get(cindex.CursorKind.UNARY_OPERATOR, [])
             if _operator_spelling(c, cindex) in targets
         )
+
+    if name == "array":
+        return _array_declared(ctx)
+
+    if name == "pointer":
+        return _pointer_used(ctx)
 
     if name == "function_def_used":
         return _function_def_used(ctx)

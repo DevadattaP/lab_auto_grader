@@ -140,7 +140,30 @@ _BUILTIN_REGEXES: dict[str, re.Pattern] = {
 # the public list consumers outside this module (e.g. the UI's checkbox set)
 # should use, rather than reaching into _BUILTIN_REGEXES directly.
 KNOWN_BUILTIN_CONSTRUCTS = sorted(
-    set(_BUILTIN_REGEXES) | {"if_else", "bitwise_and", "bitwise_or", "function_def_used", "rec_function_def_used"}
+    set(_BUILTIN_REGEXES)
+    | {"if_else", "bitwise_and", "bitwise_or", "function_def_used", "rec_function_def_used", "array", "pointer"}
+)
+
+# Declaration-shaped: a type keyword, then a name, then [ ... ] before the
+# declaration ends (`;` or `= {...}`) -- deliberately anchored to a type
+# keyword at the start so a plain subscript use (`x[i] = 5;`) doesn't
+# falsely count as declaring one. Same "declarations only, not parameters"
+# scope as the AST version (_array_declared) -- a parameter list is always
+# inside the enclosing `(...)`, which this pattern's lack of a `(` before
+# the type keyword doesn't itself exclude, so callers only apply it to
+# lines outside a function signature's parens (see _find_array_declared).
+_ARRAY_DECL_RE = re.compile(
+    r"\b(void|int|char|float|double|long|short|unsigned|signed|struct\s+\w+)\b[^;=(){}]*\w+\s*\[[^\]]*\]"
+)
+
+# A pointer declaration: type keyword, then a run of `*`/whitespace/name
+# tokens containing at least one `*` before the declarator ends -- covers
+# `int *p`, `char **argv`, `int* p`. Deliberately not used for `*p`
+# (dereference) or `&x` (address-of) -- those are a *use*, not a
+# declaration, and are handled separately by their own operator search
+# below, mirroring bitwise_and/bitwise_or's binary-vs-unary split.
+_POINTER_DECL_RE = re.compile(
+    r"\b(void|int|char|float|double|long|short|unsigned|signed|struct\s+\w+)\b[^;=(){},]*\*"
 )
 
 # C keywords that share `keyword (...) {`'s shape with a real function
@@ -326,6 +349,94 @@ def _find_function_def_used(cleaned: str) -> list[int]:
     return sorted(found)
 
 
+def _strip_parenthesized(cleaned: str) -> str:
+    """`cleaned` with the contents of every (...) span blanked to spaces --
+    same length, same line breaks. Used so a function's parameter list
+    (always inside its signature's parens) can never match the array/
+    pointer *declaration* patterns below, keeping "declarations only, not
+    parameters" true for the regex fallback the same way the AST version
+    achieves it by construction (VAR_DECL/PARM_DECL are distinct cursor
+    kinds there)."""
+    out = list(cleaned)
+    depth = 0
+    for i, c in enumerate(cleaned):
+        if c == "(":
+            depth += 1
+            continue
+        if c == ")":
+            depth = max(0, depth - 1)
+            continue
+        if depth > 0 and c != "\n":
+            out[i] = " "
+    return "".join(out)
+
+
+def _find_array_declared(cleaned: str) -> list[int]:
+    no_params = _strip_parenthesized(cleaned)
+    return _regex_lines(no_params, _ARRAY_DECL_RE)
+
+
+# scanf("%d", &n) is the near-universal idiom for reading input in
+# beginner C -- &n there is required syntax, not a deliberate choice to
+# "use a pointer" the way int *p = &n; is, so &-args of these calls don't
+# count toward the `pointer` construct (see the AST version's
+# _scanf_address_of_args for the same exclusion done properly with cursors;
+# this is the regex-fallback approximation of it).
+_SCANF_CALL_RE = re.compile(r"\b(?:scanf|fscanf|sscanf)\s*\(((?:[^()]|\([^()]*\))*)\)")
+_ADDRESS_OF_ARG_RE = re.compile(r"&\s*[A-Za-z_]\w*")
+
+
+def _blank_scanf_address_args(cleaned: str) -> str:
+    """`cleaned` with every direct `&name` argument inside a scanf/fscanf/
+    sscanf(...) call replaced by spaces (same length) -- so `_find_unary_op`
+    never sees them as an address-of use. Only touches the call's own
+    argument text, not anything nested deeper (mirrors the AST version's
+    "direct argument only" scope)."""
+    out = list(cleaned)
+    for call in _SCANF_CALL_RE.finditer(cleaned):
+        start, end = call.span(1)
+        args_text = cleaned[start:end]
+        for m in _ADDRESS_OF_ARG_RE.finditer(args_text):
+            for i in range(start + m.start(), start + m.end()):
+                out[i] = " " if cleaned[i] != "\n" else "\n"
+    return "".join(out)
+
+
+def _find_pointer(cleaned: str) -> list[int]:
+    no_params = _strip_parenthesized(cleaned)
+    decl_lines = _regex_lines(no_params, _POINTER_DECL_RE)
+    no_scanf_addrs = _blank_scanf_address_args(cleaned)
+    deref_lines = _find_unary_op(no_scanf_addrs, "*") + _find_unary_op(no_scanf_addrs, "&")
+    return sorted(set(decl_lines) | set(deref_lines))
+
+
+def _find_unary_op(cleaned: str, op: str) -> list[int]:
+    """Line numbers where `op` (`*` or `&`) appears used as a *prefix unary*
+    operator -- i.e. NOT immediately preceded (ignoring horizontal
+    whitespace) by an identifier/number/')'/']', which is exactly the
+    inverse of `_find_binary_op`'s condition. Catches dereference (`*p`,
+    `*(p+1)`) and address-of (`&x`); a `*` used for multiplication or a `&`
+    used for bitwise-and is excluded the same way `_find_binary_op` already
+    identifies those as binary."""
+    lines = []
+    i = 0
+    n = len(cleaned)
+    while True:
+        idx = cleaned.find(op, i)
+        if idx == -1:
+            break
+        i = idx + 1
+        if (idx + 1 < n and cleaned[idx + 1] == op) or (idx > 0 and cleaned[idx - 1] == op):
+            continue  # ** or && / || -- not a plain unary use
+        j = idx - 1
+        while j >= 0 and cleaned[j] in " \t":
+            j -= 1
+        if j >= 0 and (cleaned[j].isalnum() or cleaned[j] in "_)]"):
+            continue  # binary use (a*b, a&b), not unary
+        lines.append(_line_of(cleaned, idx))
+    return lines
+
+
 def _detect(cleaned: str, name: str) -> list[int]:
     """Line numbers where construct `name` is found in already-cleaned source."""
     if name == "if_else":
@@ -338,6 +449,10 @@ def _detect(cleaned: str, name: str) -> list[int]:
         return _find_function_def_used(cleaned)
     if name == "rec_function_def_used":
         return _find_recursive_functions(cleaned)
+    if name == "array":
+        return _find_array_declared(cleaned)
+    if name == "pointer":
+        return _find_pointer(cleaned)
     if name in _BUILTIN_REGEXES:
         return _regex_lines(cleaned, _BUILTIN_REGEXES[name])
     if name.startswith("function_call:"):
