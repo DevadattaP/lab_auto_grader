@@ -260,6 +260,7 @@ summary.secondary.good {
 }
 .marks-line { font-weight: 600; margin-bottom: 8px; }
 .marks-line.marks-warn { color: var(--warn); }
+.marks-line.marks-bad { color: var(--bad); }
 .stale-banner {
   background: #fef3c7;
   color: #92400e;

@@ -262,21 +262,26 @@
       let chip = "not attempted";
       let chipClass = "chip-neutral";
       if (q.last_run) {
-        chip = `${q.last_run.open_passed}/${q.last_run.open_total} open tests`;
         const allPassed = q.last_run.open_passed === q.last_run.open_total;
         // A code-checks violation (e.g. the question required a switch
         // statement and this submission didn't use one) means the student
         // hasn't actually done what the question asked, even if every test
-        // passed byte-for-byte -- that's still a "look again" state, not a
-        // clean pass, so it stays orange rather than green.
+        // passed byte-for-byte -- so the chip is forced to 0/total in red,
+        // matching the results panel, rather than showing the raw pass count.
         const codeCheckFailed = q.last_run.code_check_satisfied === false;
+        if (codeCheckFailed) {
+          chip = `0/${q.last_run.open_total} open tests`;
+        } else {
+          chip = `${q.last_run.open_passed}/${q.last_run.open_total} open tests`;
+        }
         if (!q.last_run.compile_ok) {
           chipClass = "chip-bad";
+        } else if (codeCheckFailed) {
+          chipClass = "chip-bad";
+          if (q.last_run_stale) chip += " · stale";
         } else if (q.last_run_stale) {
           chipClass = "chip-warn";
           chip += " · stale";
-        } else if (codeCheckFailed) {
-          chipClass = "chip-warn";
         } else if (allPassed) {
           chipClass = "chip-good";
         } else {
@@ -358,17 +363,23 @@
       );
     }
     if (cc.missing.length) {
-      lines.push("<ul>" + cc.missing.map((name) => `<li><code>${name}</code>: <b>not found</b></li>`).join("") + "</ul>");
+      lines.push(
+        "<ul>" +
+          cc.missing.map((name) => `<li class="warn"><code>${name}</code>: <b>not found</b></li>`).join("") +
+          "</ul>"
+      );
     }
     if (cc.forbidden.length) {
       lines.push(
         "<ul>" +
-          cc.forbidden.map(([name, line]) => `<li>forbidden <code>${name}</code>: found at line ${line}</li>`).join("") +
+          cc.forbidden
+            .map(([name, line]) => `<li class="warn">forbidden <code>${name}</code>: found at line ${line}</li>`)
+            .join("") +
           "</ul>"
       );
     }
     if (cc.gated_to_zero) {
-      lines.push(`<div class="warn">All marks for this question are zeroed due to a gate violation.</div>`);
+      lines.push(`<div>All marks for this question are zeroed due to a gate violation.</div>`);
     }
     if (cc.mode === "penalty" && cc.penalty_applied > 0) {
       lines.push(`<div class="warn">Penalty applied: -${cc.penalty_applied} marks.</div>`);
@@ -399,11 +410,32 @@
       return;
     }
     const codeCheckFailed = data.code_check && data.code_check.satisfied === false;
-    const marksClass = "marks-line" + (codeCheckFailed || stale ? " marks-warn" : "");
+    const openPassed = data.tests.filter((t) => t.passed).length;
+    const openTotal = data.tests.length;
+    // A code-checks violation means the student hasn't actually done what
+    // the question asked, even if every test passed byte-for-byte -- so the
+    // open-tests line is forced to 0/total in red, and the code check is
+    // surfaced above the test list (the thing that actually needs fixing)
+    // rather than buried below it.
+    let marksClass = "marks-line";
+    let openLine;
+    if (codeCheckFailed) {
+      marksClass += " marks-bad";
+      openLine = `Open tests: 0/${openTotal}`;
+    } else {
+      marksClass += openPassed === openTotal ? "" : " marks-warn";
+      openLine = `Open tests: ${openPassed}/${openTotal}`;
+    }
     let html = stale ? staleBannerHtml() : "";
-    html += `<div class="${marksClass}">Open tests: ${data.marks_earned}/${data.marks_total}</div>`;
-    html += data.tests.map(renderTestResult).join("");
-    html += renderCodeCheck(data.code_check);
+    if (codeCheckFailed) {
+      html += renderCodeCheck(data.code_check);
+      html += `<div class="${marksClass}">${openLine}</div>`;
+      html += data.tests.map(renderTestResult).join("");
+    } else {
+      html += `<div class="${marksClass}">${openLine}</div>`;
+      html += data.tests.map(renderTestResult).join("");
+      html += renderCodeCheck(data.code_check);
+    }
     resultsPanelEl.innerHTML = html;
   }
 
